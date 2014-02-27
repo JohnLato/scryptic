@@ -1,0 +1,207 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
+
+{-# OPTIONS -Wall #-}
+module Scryptic.Runtime (
+  ScryptEngine,
+  startScryptEngine,
+  runScrypt,
+  joinScryptEngine,
+) where
+
+import Scryptic.RuntimeOptions
+import Scryptic.Scrypt
+import Scryptic.Types
+import Control.Applicative
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.STM
+import Control.Lens
+import Control.Monad.Reader
+import Data.List (intercalate)
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Typeable
+import Debug.Trace (traceIO)
+
+data RuntimeState = RuntimeState
+    { _rsInpMap :: TVar (Map Key Input)
+    , _rsOutMap :: TVar (Map Key Output)
+    , _rsOpts   :: TVar ScryptOpt
+    , _rsErrCxt :: [String]
+    }
+
+data ScryptEngine = ScryptEngine
+    { _seState :: RuntimeState
+    }
+
+$(makeLenses ''RuntimeState)
+$(makeLenses ''ScryptEngine)
+
+startScryptEngine :: ScryptOpt -> IO ScryptEngine
+startScryptEngine opt0 = do
+    inpMapRef <- newTVarIO Map.empty
+    outMapRef <- newTVarIO Map.empty
+    optRef <- newTVarIO opt0
+    let state0 = RuntimeState inpMapRef outMapRef optRef ["scryptic"]
+        sEngine = ScryptEngine state0
+    return sEngine
+
+runScrypt :: String -> Scrypt -> ScryptEngine -> IO ()
+runScrypt lbl scrypt sEngine = do
+    runReaderT (unSEM runner) (sEngine^.seState)
+  where
+    runner = outerCxt $ doWithFlow scrypt
+    outerCxt = if null lbl then id else errCxt lbl
+
+-- modify the inputs/outputs available to the ScryptEngine.
+joinScryptEngine :: ScryptHooks -> ScryptEngine -> IO ()
+joinScryptEngine scryptic sEngine = do
+    let rState = sEngine^.seState
+    atomically $ do
+        modifyTVar (rState^.rsInpMap) (merge "input"  (scryptic^.inpMap))
+        modifyTVar (rState^.rsOutMap) (merge "output" (scryptic^.outMap))
+    let remKey mp key = atomically $ modifyTVar mp (Map.delete key)
+    imapMOf_ (itraversed.inputFinalizer._Just)
+            (\key -> ($ remKey (rState^.rsInpMap) key)) (scryptic^.inpMap)
+    imapMOf_ (itraversed.outputFinalizer._Just)
+            (\key -> ($ remKey (rState^.rsOutMap) key)) (scryptic^.outMap)
+    return ()
+
+newtype ScryptEngineM a = ScryptEngineM
+    { unSEM :: ReaderT RuntimeState IO a }
+    deriving (Functor, Monad, Applicative, MonadIO)
+
+instance MonadReader RuntimeState ScryptEngineM where
+    ask = ScryptEngineM ask
+    local f = ScryptEngineM . local f . unSEM
+    reader = ScryptEngineM . reader
+
+-- currently the only flow control construct I have is the script title.
+-- I guess more will likely be added if more power is needed.
+doWithFlow :: Scrypt -> ScryptEngineM ()
+doWithFlow = go
+  where
+    go (x:xs)
+      | isFlowLine x = case x of
+          Title str -> errCxt str $ go xs
+          _         -> error $ "scryptic: internal error in doWithFlow, " ++ show x
+      | otherwise = evalLine x >> go xs
+    go [] = return ()
+
+evalLine :: ScryptStatement -> ScryptEngineM ()
+evalLine ln = case ln of
+    Trigger key -> errCxt "trigger" $ withOutKey key $
+        \expectType out -> stepTrace traceMsg $ case cast () of
+            Just x -> liftIO $ out x
+            Nothing -> doError $ concat
+                [ "can't trigger type " , show expectType ]
+        where traceMsg = keyStr key
+
+    TriggerSync key sKey -> errCxt "trigger" $ withInpKey sKey $ \inRef ->
+        errCxt "sync" $ withOutKey key $ \expectType out ->
+            stepTrace traceMsg $ case cast () of
+                Just x  -> liftIO . void $ installInputWaiter inRef (out x)
+                Nothing -> doError $ concat
+                            [ "can't trigger type ", show expectType ]
+        where traceMsg = concat [keyStr key," ;",prettyPair "sync" sKey]
+
+    Wait key -> errCxt "wait" $ withInpKey key $ \ref -> stepTrace traceMsg
+        $ liftIO . void $ installInputWaiter ref (return ())
+        where traceMsg = keyStr key
+
+    Write key val's -> errCxt "write" $ withOutKey key $
+        \expectType out -> stepTrace traceMsg $ case read val's of
+            Just x -> liftIO . void $ out x
+            Nothing -> doError $ concat
+                  [ "can't read input `", val's
+                  , "' as type ", show expectType ]
+        where traceMsg = concat [keyStr key," ;",valStr val's]
+
+    Watch key -> errCxt "watch" $ withInpKey key $ \ref ->
+        stepTrace traceMsg $ liftIO . atomically $ writeTVar ref print
+        where traceMsg = keyStr key
+
+    Unwatch key -> errCxt "unwatch" $ withInpKey key $ \ref ->
+        stepTrace traceMsg $ liftIO . atomically $ writeTVar ref nullAkt
+        where traceMsg = keyStr key
+
+    SetOpt f lbl -> errCxt "setopt" $ stepTrace lbl $ do
+          optRef <- view rsOpts
+          liftIO . atomically $ modifyTVar optRef (unSOA f)
+
+    Sleep nSecs -> errCxt "sleep" $ stepTrace ""
+        $ liftIO $ threadDelay (floor (nSecs*1000000))
+
+    Title{} -> error $ "scryptic: internal error, evalLine got " ++ show ln
+
+installInputWaiter :: TVar (b -> IO ()) -> IO a -> IO b
+installInputWaiter ref preWait = do
+    sem <- newEmptyTMVarIO
+    let akt = atomically . putTMVar sem
+    atomically $ writeTVar ref akt
+    void preWait
+    atomically $ do
+        writeTVar ref nullAkt
+        takeTMVar sem
+
+errCxt :: String -> ScryptEngineM a -> ScryptEngineM a
+errCxt err = local (over rsErrCxt (err:))
+
+withInpKey :: Key
+           -> (forall a. (Typeable a, Read a, Show a)
+                      => TVar (a -> IO ()) -> ScryptEngineM ())
+           -> ScryptEngineM ()
+withInpKey key akt = do
+    inpRef <- view rsInpMap
+    inpRef^! act (liftIO . readTVarIO) . atKey key >>= \case
+            Nothing -> doError $ "can't find key " ++ key
+            Just (Input ref _) -> akt ref
+
+withOutKey :: Key
+           -> (forall a. (Typeable a, Read a)
+                => TypeRep -> (a -> IO ()) -> ScryptEngineM ())
+           -> ScryptEngineM ()
+withOutKey key akt = do
+    outRef <- view rsOutMap
+    outRef^! act (liftIO . readTVarIO) . atKey key >>= \case
+            Nothing -> doError $ "can't find key " ++ key
+            Just (Output expectType out _) -> akt expectType out
+
+doError :: String -> ScryptEngineM ()
+doError err = do
+    opts <- view rsOpts
+    justDie <- opts^!act (liftIO . readTVarIO) . soDieOnErr
+    if justDie
+        then do
+            cxt <- view rsErrCxt
+            error $ intercalate ": "
+                $ reverse (err:"fatal (dieOnErr)":cxt)
+        else errCxt "runtime error" $ writeTrace err
+
+-- | 
+stepTrace :: String -> ScryptEngineM a -> ScryptEngineM a
+stepTrace msg akt = do
+    optsRef <- view rsOpts
+    doTrace <- optsRef^! act (liftIO . readTVarIO) . soTrace
+    when doTrace $ errCxt "stepping" $ writeTrace msg
+    akt
+
+-- just output the message, with the current context stack.
+writeTrace :: String -> ScryptEngineM ()
+writeTrace msg = do
+    cxt <- view rsErrCxt
+    liftIO . traceIO $ (intercalate ": " $ reverse (msg:cxt))
+
+prettyPair :: String -> String -> String
+prettyPair spec lbl = concat [spec," <",lbl,">"]
+
+keyStr :: Key -> String
+keyStr = prettyPair "key"
+valStr :: String -> String
+valStr = prettyPair "val"
+
+nullAkt :: a -> IO ()
+nullAkt _ = return ()
