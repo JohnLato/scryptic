@@ -16,7 +16,20 @@ import Data.Text (Text)
 parseScript :: Text -> Either ParseError Scrypt
 parseScript inp = runP parseAll () "input" inp
   where
-    lineParsers =
+    parseAll = spaces *> many parseBlock <* eof
+
+-- this never returns an empty block, which means it can be called with
+-- `many` itself.
+parseBlock :: Parser ScryptBlock
+parseBlock =
+    mkBlock <$> optionMaybe (parseReservedKey "title" <* spacesComments)
+            <*> many1 statementParsers
+  where
+    mkBlock Nothing xs = ScryptBlock xs
+    mkBlock (Just title) xs = TitledBlock title xs
+
+statementParsers :: Parser ScryptStatement
+statementParsers = choice
         [ parseTrigger
         , parseWait
         , parseWrite
@@ -24,14 +37,11 @@ parseScript inp = runP parseAll () "input" inp
         , parseUnwatch
         , parseSleep
         , parseOpt ]
-    parseAll = spaces
-               *> many (choice lineParsers)
-               <* eof
 
 parseTrigger :: Parser ScryptStatement
 parseTrigger = do
-    key <- parseReservedKey "trigger" <* spaces
-    optionMaybe (parseReservedKey "sync" <* spaces) >>= \case
+    key <- parseReservedKey "trigger" <* spacesComments
+    optionMaybe (parseReservedKey "sync" <* spacesComments) >>= \case
         Just sKey -> return $ TriggerSync key sKey
         Nothing -> return $ Trigger key
 
@@ -39,32 +49,33 @@ parseTrigger = do
 parseWrite :: Parser ScryptStatement
 parseWrite =
     Write <$> parseReservedKey "write"
-          <* spaces <*> (parseString <|> parseNum) <* spaces
+          <* spaces <*> (parseString <|> parseNum) <* spacesComments
 
 parseWait :: Parser ScryptStatement
-parseWait = Wait <$> parseReservedKey "wait" <* spaces
+parseWait = Wait <$> parseReservedKey "wait" <* spacesComments
 
 parseWatch :: Parser ScryptStatement
-parseWatch = Watch <$> parseReservedKey "watch" <* spaces
+parseWatch = Watch <$> parseReservedKey "watch" <* spacesComments
 
 parseUnwatch :: Parser ScryptStatement
-parseUnwatch = Unwatch <$> parseReservedKey "unwatch" <* spaces
+parseUnwatch = Unwatch <$> parseReservedKey "unwatch" <* spacesComments
 
 parseSleep :: Parser ScryptStatement
 parseSleep = do
     str <- string "sleep" *> spaces *> parseNum
     case read str of
-        Just n -> Sleep n <$ spaces
+        Just n -> Sleep n <$ spacesComments
         Nothing -> fail $ concat
             [ "scryptic: sleep: doesn't look like a number, `"
             , str, "'" ]
 
 parseOpt :: Parser ScryptStatement
 parseOpt = do
-    optName <- parseReservedKey "opt" <* spaces
+    optName <- parseReservedKey "opt" <* spacesComments
     optVal <- many (satisfy (not . isSpace))
-    let msgStr = concat ["key <",optName,"> val <",optVal,">"]
-    flip SetOpt msgStr <$> getValuedOptionSetter optName optVal <* spaces
+    let msgStr = concat ["set <",optName,">  <",optVal,">"]
+    flip SetOpt msgStr <$> getValuedOptionSetter optName optVal
+                       <* spacesComments
 
 parseReservedKey :: String -> Parser String
 parseReservedKey reserved =
@@ -89,3 +100,13 @@ parseNum = (\a b c d -> concat [a,b,c,d])
         (liftA2 (++) (option "" (string "-")) (many1 digit)) )
   where
     mPrefix c p = liftA2 (++) (string [c]) p
+
+-- before long I'll want a tokenizing parser.  When it gets to that point,
+-- I might prefer an actual grammar though.
+parseComment :: Parser ()
+parseComment = () <$ string "--" <* skipMany (noneOf "\n") <* char '\n'
+
+spacesComments :: Parser ()
+spacesComments = spaces *> sp'
+  where
+    sp'  = skipMany (parseComment *> spaces)

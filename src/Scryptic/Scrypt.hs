@@ -8,7 +8,12 @@ where
 import Scryptic.Types
 import Scryptic.RuntimeOptions
 
-type Scrypt = [ScryptStatement]
+type Scrypt = [ScryptBlock]
+
+data ScryptBlock
+  = ScryptBlock [ScryptStatement]
+  | TitledBlock String [ScryptStatement]
+  deriving (Show)
 
 data ScryptStatement
   = Trigger Key
@@ -19,11 +24,5 @@ data ScryptStatement
   | Unwatch Key
   | Sleep Double
   | SetOpt ScryptOptAdj String
-  | Title String
 
 deriving instance Show ScryptStatement
-
--- check if a line alters control flow
-isFlowLine :: ScryptStatement -> Bool
-isFlowLine (Title{}) = True
-isFlowLine _ = False

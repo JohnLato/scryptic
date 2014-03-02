@@ -82,14 +82,11 @@ instance MonadReader RuntimeState ScryptEngineM where
 -- currently the only flow control construct I have is the script title.
 -- I guess more will likely be added if more power is needed.
 doWithFlow :: Scrypt -> ScryptEngineM ()
-doWithFlow = go
+doWithFlow = mapM_ doBlock
   where
-    go (x:xs)
-      | isFlowLine x = case x of
-          Title str -> errCxt str $ go xs
-          _         -> error $ "scryptic: internal error in doWithFlow, " ++ show x
-      | otherwise = evalLine x >> go xs
-    go [] = return ()
+    doBlock x = case x of
+        ScryptBlock stmts     -> mapM_ evalLine stmts
+        TitledBlock str stmts -> errCxt str (mapM_ evalLine stmts)
 
 evalLine :: ScryptStatement -> ScryptEngineM ()
 evalLine ln = case ln of
@@ -134,8 +131,6 @@ evalLine ln = case ln of
 
     Sleep nSecs -> errCxt "sleep" $ stepTrace ""
         $ liftIO $ threadDelay (floor (nSecs*1000000))
-
-    Title{} -> error $ "scryptic: internal error, evalLine got " ++ show ln
 
 installInputWaiter :: TVar (b -> IO ()) -> IO a -> IO b
 installInputWaiter ref preWait = do
