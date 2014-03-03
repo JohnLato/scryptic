@@ -107,7 +107,7 @@ evalLine ln = case ln of
                 Just x  -> liftIO . void $ installInputWaiter inRef (out x)
                 Nothing -> doError $ concat
                             [ "can't trigger type ", show expectType ]
-        where traceMsg = concat [keyStr key," ;",prettyPair "sync" sKey]
+        where traceMsg = concat [keyStr key,"; ",prettyPair "sync" sKey]
 
     Wait key -> errCxt "wait" $ withInpKey key $ \ref -> stepTrace traceMsg
         $ liftIO . void $ installInputWaiter ref (return ())
@@ -119,7 +119,7 @@ evalLine ln = case ln of
             Nothing -> doError $ concat
                   [ "can't read input `", val's
                   , "' as type ", show expectType ]
-        where traceMsg = concat [keyStr key," ;",valStr val's]
+        where traceMsg = concat [keyStr key,"; ",valStr val's]
 
     Watch key -> errCxt "watch" $ withInpKey key $ \ref ->
         stepTrace traceMsg $ liftIO . atomically $ writeTVar ref print
