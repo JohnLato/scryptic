@@ -4,6 +4,7 @@ module Scryptic.Pure (
 ) where
 
 import Scryptic.Types
+
 import Control.Concurrent.STM
 import Control.Lens
 
@@ -25,6 +26,6 @@ scryptOutput :: (Typeable a, Read a, Show a)
              => String -> IO (a->IO(),ScryptHooks)
 scryptOutput key = do
     ref <- newTVarIO (const $ return ())
-    let scryptic = mempty & inpMap .~ Map.singleton key (Input ref Nothing)
+    let scryptic = mempty & inpMap .~ Map.singleton key (Input ref)
         akt a = readTVarIO ref >>= ($ a)
     return (akt, scryptic)

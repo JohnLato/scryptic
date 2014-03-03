@@ -17,7 +17,7 @@ type MkFinalizer = Maybe (IO () -> IO ())
 -- inputs/outputs from the Scryptic point of view; an Input corresponds
 -- to output from an application.
 data Input  = forall a. (Typeable a, Read a, Show a)
-            => Input (TVar (a->IO ())) MkFinalizer
+            => Input (TVar (a->IO ()))
     deriving (Typeable)
 data Output = forall a. (Typeable a, Read a)
             => Output TypeRep (a -> IO ()) MkFinalizer
@@ -31,9 +31,6 @@ data ScryptHooks = ScryptHooks
     }
 
 $(makeLenses ''ScryptHooks)
-
-inputFinalizer :: IndexPreservingLens' Input MkFinalizer
-inputFinalizer = iplens (\(Input _ f) -> f) (\(Input a _) f -> Input a f)
 
 outputFinalizer :: IndexPreservingLens' Output MkFinalizer
 outputFinalizer =

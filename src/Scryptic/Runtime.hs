@@ -15,6 +15,8 @@ module Scryptic.Runtime (
 import Scryptic.RuntimeOptions
 import Scryptic.Scrypt
 import Scryptic.Types
+import Scryptic.Weak
+
 import Control.Applicative
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
@@ -26,7 +28,7 @@ import qualified Data.Map as Map
 import Data.Typeable
 
 data RuntimeState = RuntimeState
-    { _rsInpMap :: TVar (Map Key Input)
+    { _rsInpMap :: TVar (Map Key (Weak Input))
     , _rsOutMap :: TVar (Map Key Output)
     , _rsOpts   :: TVar ScryptOpt
     , _rsErrCxt :: [String]
@@ -59,12 +61,15 @@ runScrypt lbl scrypt sEngine = do
 joinScryptEngine :: ScryptHooks -> ScryptEngine -> IO ()
 joinScryptEngine scryptic sEngine = do
     let rState = sEngine^.seState
+        remKey mp key = atomically $ modifyTVar mp (Map.delete key)
+
+    wkInpMap <- imapM (\key i@(Input tv) ->
+                  mkWeakTVarKey tv i (Just $ remKey (rState^.rsInpMap) key))
+                  (scryptic^.inpMap)
+
     atomically $ do
-        modifyTVar (rState^.rsInpMap) (merge "input"  (scryptic^.inpMap))
+        modifyTVar (rState^.rsInpMap) (merge "input"  wkInpMap)
         modifyTVar (rState^.rsOutMap) (merge "output" (scryptic^.outMap))
-    let remKey mp key = atomically $ modifyTVar mp (Map.delete key)
-    imapMOf_ (itraversed.inputFinalizer._Just)
-            (\key -> ($ remKey (rState^.rsInpMap) key)) (scryptic^.inpMap)
     imapMOf_ (itraversed.outputFinalizer._Just)
             (\key -> ($ remKey (rState^.rsOutMap) key)) (scryptic^.outMap)
     return ()
@@ -155,7 +160,9 @@ withInpKey key akt = do
                 iMap <- liftIO $ readTVarIO inpRef
                 writeDebug $ "input keys: " ++ show (Map.keys iMap)
                 doError $ "can't find key " ++ key
-            Just (Input ref _) -> akt ref
+            Just wkref -> liftIO (deRefWeak wkref) >>= \case
+                Just (Input ref) -> akt ref
+                Nothing  -> doError $ "internal: weak ref expired: " ++ key
 
 withOutKey :: Key
            -> (forall a. (Typeable a, Read a)

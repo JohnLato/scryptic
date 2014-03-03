@@ -23,6 +23,7 @@ library
                        Scryptic.RuntimeOptions,
                        Scryptic.Scrypt,
                        Scryptic.Types
+                       Scryptic.Weak
   -- other-modules:       
   other-extensions:    GeneralizedNewtypeDeriving,
                        MultiParamTypeClasses,
