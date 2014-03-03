@@ -68,7 +68,7 @@ parseUnwatch = Unwatch <$> parseReservedKey "unwatch" <* spacesComments
 parseSleep :: Parser ScryptStatement
 parseSleep = do
     str <- string "sleep" *> spaces *> parseNum
-    case read str of
+    case mRead str of
         Just n -> Sleep n <$ spacesComments
         Nothing -> fail $ concat
             [ "scryptic: sleep: doesn't look like a number, `"
