@@ -94,4 +94,4 @@ subNamespace m = do
 applyNamespace :: String -> ScrypticM String
 applyNamespace key = do
     nm <- use mNamespace
-    return $ concat [nm, ".", key]
+    if null nm then return key else return $ concat [nm, ".", key]

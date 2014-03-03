@@ -24,7 +24,6 @@ import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Typeable
-import Debug.Trace (traceIO)
 
 data RuntimeState = RuntimeState
     { _rsInpMap :: TVar (Map Key Input)
@@ -110,8 +109,8 @@ evalLine ln = case ln of
         where traceMsg = keyStr key
 
     Write key val's -> errCxt "write" $ withOutKey key $
-        \expectType out -> stepTrace traceMsg $ case read val's of
-            Just x -> liftIO . void $ out x
+        \expectType out -> stepTrace traceMsg $ case mRead val's of
+            Just x  -> liftIO . void $ out x
             Nothing -> doError $ concat
                   [ "can't read input `", val's
                   , "' as type ", show expectType ]
@@ -188,7 +187,7 @@ stepTrace msg akt = do
 writeTrace :: String -> ScryptEngineM ()
 writeTrace msg = do
     cxt <- view rsErrCxt
-    liftIO . traceIO $ (intercalate ": " $ reverse (msg:cxt))
+    liftIO . putStrLn $ (intercalate ": " $ reverse (msg:cxt))
 
 prettyPair :: String -> String -> String
 prettyPair spec lbl = concat [spec," <",lbl,">"]

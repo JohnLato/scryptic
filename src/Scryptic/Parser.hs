@@ -2,6 +2,7 @@
 
 module Scryptic.Parser (
   parseScript,
+  parseFile,
 ) where
 
 import Scryptic.RuntimeOptions
@@ -12,11 +13,15 @@ import Text.Parsec
 import Text.Parsec.Text
 import Data.Char
 import Data.Text (Text)
+import qualified Data.Text.IO as Text
 
 parseScript :: Text -> Either ParseError Scrypt
 parseScript inp = runP parseAll () "input" inp
   where
-    parseAll = spaces *> many parseBlock <* eof
+    parseAll = spacesComments *> many parseBlock <* eof
+
+parseFile :: FilePath -> IO (Either ParseError Scrypt)
+parseFile file = parseScript <$> Text.readFile file
 
 -- this never returns an empty block, which means it can be called with
 -- `many` itself.

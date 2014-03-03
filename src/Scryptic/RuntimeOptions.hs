@@ -16,6 +16,7 @@ module Scryptic.RuntimeOptions (
     -- ** really not for external use...
     ScryptOptAdj(..),
     scryptOptAdj,
+    mRead,
 ) where
 
 import Control.Lens
@@ -73,10 +74,15 @@ getValuedOptionSetter' :: forall s a u t. (Typeable a, Read a
                        -> Parsec s u ScryptOptAdj
 getValuedOptionSetter' optMap key val = case Map.lookup key optMap of
     Nothing -> fail $ "scryptic: no option named " ++ key
-    Just theLens -> case reads val of
-        ((b,_):_) -> return . ScryptOptAdj $ (UNLENS theLens) .~ b
-        [] -> failKeyVal key val (show $ typeOf (undefined :: a))
+    Just theLens -> case mRead val of
+        Just b  -> return . ScryptOptAdj $ (UNLENS theLens) .~ b
+        Nothing -> failKeyVal key val (show $ typeOf (undefined :: a))
 
 failKeyVal :: Monad m => String -> String -> String -> m a
 failKeyVal key val msg = fail $ concat
     [ "value <", val, "> for key <",key,"> doesn't appear to be a ", msg ]
+
+mRead :: Read a => String -> Maybe a
+mRead str = case reads str of
+        ((b,_):_) -> Just b
+        [] -> Nothing
