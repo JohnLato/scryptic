@@ -151,7 +151,10 @@ withInpKey :: Key
 withInpKey key akt = do
     inpRef <- view rsInpMap
     inpRef^! act (liftIO . readTVarIO) . atKey key >>= \case
-            Nothing -> doError $ "can't find key " ++ key
+            Nothing -> do
+                iMap <- liftIO $ readTVarIO inpRef
+                writeDebug $ "input keys: " ++ show (Map.keys iMap)
+                doError $ "can't find key " ++ key
             Just (Input ref _) -> akt ref
 
 withOutKey :: Key
@@ -161,7 +164,10 @@ withOutKey :: Key
 withOutKey key akt = do
     outRef <- view rsOutMap
     outRef^! act (liftIO . readTVarIO) . atKey key >>= \case
-            Nothing -> doError $ "can't find key " ++ key
+            Nothing -> do
+                oMap <- liftIO $ readTVarIO outRef
+                writeDebug $ "output keys: " ++ show (Map.keys oMap)
+                doError $ "can't find key " ++ key
             Just (Output expectType out _) -> akt expectType out
 
 doError :: String -> ScryptEngineM ()
@@ -188,6 +194,13 @@ writeTrace :: String -> ScryptEngineM ()
 writeTrace msg = do
     cxt <- view rsErrCxt
     liftIO . putStrLn $ (intercalate ": " $ reverse (msg:cxt))
+
+-- | print a debug message
+writeDebug :: String -> ScryptEngineM ()
+writeDebug msg = do
+    optsRef <- view rsOpts
+    opts <- liftIO $ readTVarIO optsRef
+    when (opts^.soDebug) $ writeTrace msg
 
 prettyPair :: String -> String -> String
 prettyPair spec lbl = concat [spec," <",lbl,">"]

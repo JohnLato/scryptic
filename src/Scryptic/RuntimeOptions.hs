@@ -11,6 +11,7 @@ module Scryptic.RuntimeOptions (
     defaultScryptOpts,
     soTrace,
     soDieOnErr,
+    soDebug,
 
     getValuedOptionSetter,
     -- ** really not for external use...
@@ -41,12 +42,13 @@ import Text.Parsec (Parsec, choice, Stream)
 data ScryptOpt = ScryptOpt
     { _soTrace :: Bool
     , _soDieOnErr :: Bool
+    , _soDebug :: Bool
     } deriving (Eq, Show)
 
 $(makeLenses ''ScryptOpt)
 
 defaultScryptOpts :: ScryptOpt
-defaultScryptOpts = ScryptOpt False True
+defaultScryptOpts = ScryptOpt False True False
 
 newtype ScryptOptAdj = ScryptOptAdj { unSOA :: ScryptOpt -> ScryptOpt}
 $(makeIso ''ScryptOptAdj)
@@ -57,7 +59,8 @@ instance Show (ScryptOptAdj) where
 boolOptionMap :: Map String (ReifiedLens' ScryptOpt Bool)
 boolOptionMap = Map.fromList
     [ ("trace", LENS soTrace)
-    , ("dieOnError", LENS soDieOnErr) ]
+    , ("dieOnError", LENS soDieOnErr)
+    , ("debug", LENS soDebug) ]
 
 getValuedOptionSetter :: (Stream s Identity t)
                       => String -> String
