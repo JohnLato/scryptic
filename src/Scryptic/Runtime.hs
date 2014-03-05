@@ -94,21 +94,6 @@ doWithFlow = mapM_ doBlock
 
 evalLine :: ScryptStatement -> ScryptEngineM ()
 evalLine ln = case ln of
-    Trigger key -> errCxt "trigger" $ withOutKey key $
-        \expectType out -> stepTrace traceMsg $ case cast () of
-            Just x -> liftIO $ out x
-            Nothing -> doError $ concat
-                [ "can't trigger type " , show expectType ]
-        where traceMsg = keyStr key
-
-    TriggerSync key sKey -> errCxt "trigger" $ withInpKey sKey $ \inRef ->
-        errCxt "sync" $ withOutKey key $ \expectType out ->
-            stepTrace traceMsg $ case cast () of
-                Just x  -> liftIO . void $ installInputWaiter inRef (out x)
-                Nothing -> doError $ concat
-                            [ "can't trigger type ", show expectType ]
-        where traceMsg = concat [keyStr key,"; ",prettyPair "sync" sKey]
-
     Wait key -> errCxt "wait" $ withInpKey key $ \ref -> stepTrace traceMsg
         $ liftIO . void $ installInputWaiter ref (return ())
         where traceMsg = keyStr key
@@ -120,6 +105,15 @@ evalLine ln = case ln of
                   [ "can't read input `", val's
                   , "' as type ", show expectType ]
         where traceMsg = concat [keyStr key,"; ",valStr val's]
+
+    WriteSync key val's sKey -> errCxt "write" $ withInpKey sKey $ \inRef ->
+        errCxt "sync" $ withOutKey key $ \expectType out ->
+            stepTrace traceMsg $ case mRead val's of
+                Just x  -> liftIO . void $ installInputWaiter inRef (out x)
+                Nothing -> doError $ concat
+                            [ "can't trigger type ", show expectType ]
+        where traceMsg = concat [keyStr key,"; ",prettyPair "sync" sKey]
+
 
     Watch key -> errCxt "watch" $ withInpKey key $ \ref ->
         stepTrace traceMsg $ liftIO . atomically $ writeTVar ref print

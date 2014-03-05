@@ -35,26 +35,21 @@ parseBlock =
 
 statementParsers :: Parser ScryptStatement
 statementParsers = choice
-        [ parseTrigger
-        , parseWait
+        [ parseWait
         , parseWrite
         , parseWatch
         , parseUnwatch
         , parseSleep
         , parseOpt ]
 
-parseTrigger :: Parser ScryptStatement
-parseTrigger = do
-    key <- parseReservedKey "trigger" <* spacesComments
-    optionMaybe (parseReservedKey "sync" <* spacesComments) >>= \case
-        Just sKey -> return $ TriggerSync key sKey
-        Nothing -> return $ Trigger key
-
 -- parse a 'write' line
 parseWrite :: Parser ScryptStatement
-parseWrite =
-    Write <$> parseReservedKey "write"
-          <* spaces <*> (parseString <|> parseNum) <* spacesComments
+parseWrite = do
+    key <- parseReservedKey "write" <* spaces
+    val <- option "()" (parseString <|> parseNum) <* spacesComments
+    optionMaybe (parseReservedKey "sync" <* spacesComments) >>= \case
+        Just sKey -> return $ WriteSync key val sKey
+        Nothing -> return $ Write key val
 
 parseWait :: Parser ScryptStatement
 parseWait = Wait <$> parseReservedKey "wait" <* spacesComments
@@ -98,7 +93,8 @@ parseString = concat <$> between (char '"') (char '"' <?> "end of string")
 -- scientific notation
 parseNum :: Parser String
 parseNum = (\a b c d -> concat [a,b,c,d])
-    <$> option "" (string "-")
+    -- we don't want to match comments...
+    <$> option "" (try $ string "-" <* notFollowedBy (char '-'))
     <*> many1 digit
     <*> option "" (mPrefix '.' (many1 digit))
     <*> option "" (liftA2 (++) (string "e")

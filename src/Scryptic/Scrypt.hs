@@ -16,10 +16,9 @@ data ScryptBlock
   deriving (Show)
 
 data ScryptStatement
-  = Trigger Key
-  | TriggerSync Key Key{-sync-}
-  | Wait Key
+  = Wait Key
   | Write Key String
+  | WriteSync Key String Key{-sync-}
   | Watch Key
   | Unwatch Key
   | Sleep Double
