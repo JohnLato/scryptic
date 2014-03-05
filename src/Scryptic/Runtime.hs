@@ -54,7 +54,7 @@ runScrypt :: String -> Scrypt -> ScryptEngine -> IO ()
 runScrypt lbl scrypt sEngine = do
     runReaderT (unSEM runner) (sEngine^.seState)
   where
-    runner = outerCxt $ doWithFlow scrypt
+    runner = outerCxt $ dumpScrypt scrypt >> doWithFlow scrypt
     outerCxt = if null lbl then id else errCxt lbl
 
 -- modify the inputs/outputs available to the ScryptEngine.
@@ -170,6 +170,12 @@ withOutKey key akt = do
                 writeDebug $ "output keys: " ++ show (Map.keys oMap)
                 doError $ "can't find key " ++ key
             Just (Output expectType out _) -> akt expectType out
+
+dumpScrypt :: Scrypt -> ScryptEngineM ()
+dumpScrypt scrypt = do
+    opts <- view rsOpts
+    showDump <- opts^!act (liftIO . readTVarIO) . soDumpScrypts
+    when showDump $ liftIO . putStrLn . unlines $ map show scrypt
 
 doError :: String -> ScryptEngineM ()
 doError err = do

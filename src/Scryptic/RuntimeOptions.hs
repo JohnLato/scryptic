@@ -9,9 +9,13 @@
 module Scryptic.RuntimeOptions (
     ScryptOpt(..),
     defaultScryptOpts,
+    debugScryptOpts,
+
+    -- ** lenses
     soTrace,
     soDieOnErr,
     soDebug,
+    soDumpScrypts,
 
     getValuedOptionSetter,
     -- ** really not for external use...
@@ -43,12 +47,16 @@ data ScryptOpt = ScryptOpt
     { _soTrace :: Bool
     , _soDieOnErr :: Bool
     , _soDebug :: Bool
+    , _soDumpScrypts :: Bool
     } deriving (Eq, Show)
 
 $(makeLenses ''ScryptOpt)
 
 defaultScryptOpts :: ScryptOpt
-defaultScryptOpts = ScryptOpt False True False
+defaultScryptOpts = ScryptOpt False True False False
+
+debugScryptOpts :: ScryptOpt
+debugScryptOpts = ScryptOpt True False True True
 
 newtype ScryptOptAdj = ScryptOptAdj { unSOA :: ScryptOpt -> ScryptOpt}
 $(makeIso ''ScryptOptAdj)
@@ -60,7 +68,8 @@ boolOptionMap :: Map String (ReifiedLens' ScryptOpt Bool)
 boolOptionMap = Map.fromList
     [ ("trace", LENS soTrace)
     , ("dieOnError", LENS soDieOnErr)
-    , ("debug", LENS soDebug) ]
+    , ("debug", LENS soDebug)
+    , ("dumpScrypts", LENS soDumpScrypts) ]
 
 getValuedOptionSetter :: (Stream s Identity t)
                       => String -> String
