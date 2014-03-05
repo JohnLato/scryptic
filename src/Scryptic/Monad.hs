@@ -40,32 +40,34 @@ instance Monoid MState where
                            (r^.mNamespace)
         -- namespace is notionally the same as 'Last String'
 
-newtype ScrypticM a = ScrypticM { runSM :: StateT MState IO a }
+newtype ScrypticM m a = ScrypticM { runSM :: StateT MState m a }
     deriving (Functor, Applicative, Monad, MonadIO)
 
-instance MonadState MState ScrypticM where
+instance Monad m => MonadState MState (ScrypticM m) where
     get = ScrypticM get
     put = ScrypticM . put
     state = ScrypticM . state
 
-getScryptHooks :: ScrypticM a -> IO (a,ScryptHooks)
-getScryptHooks m = (fmap . fmap) (view mScryptHooks)
+getScryptHooks :: Monad m => ScrypticM m a -> m (a,ScryptHooks)
+getScryptHooks m = (liftM . fmap) (view mScryptHooks)
     $ runStateT (runSM m) mempty
 
 -- | convenience function to build a 'ScryptHooks' and join it
 -- to an existing engine.
-joinToEngine :: ScryptEngine -> ScrypticM a -> IO a
+joinToEngine :: MonadIO m => ScryptEngine -> ScrypticM m a -> m a
 joinToEngine engine m = do
     (a,scryptHooks) <- getScryptHooks m
-    joinScryptEngine scryptHooks engine
+    liftIO $ joinScryptEngine scryptHooks engine
     return a
 
-scryptInput :: (Typeable a, Read a) => String -> (a -> IO ()) -> ScrypticM ()
+scryptInput :: (Monad m, Typeable a, Read a) => String -> (a -> IO ())
+            -> ScrypticM m ()
 scryptInput key akt = do
     key' <- applyNamespace key
     mScryptHooks <>= Pure.scryptInput (key') akt
 
-scryptOutput :: (Typeable a, Read a, Show a) => String -> ScrypticM (a->IO())
+scryptOutput :: (MonadIO m, Typeable a, Read a, Show a) => String
+             -> ScrypticM m (a->IO())
 scryptOutput key = do
     key' <- applyNamespace key
     (akt,scryptHooks) <- liftIO $ Pure.scryptOutput key'
@@ -74,11 +76,11 @@ scryptOutput key = do
 
 -- | Set a namespace context for following bindings.  Namespaces are
 -- accessed in scrypts as 'namespace.key'
-setNamespace :: String -> ScrypticM ()
+setNamespace :: Monad m => String -> ScrypticM m ()
 setNamespace nm = mNamespace .= nm
 
 -- | Run a 'ScrypticM' under the current namespace.
-subNamespace :: ScrypticM a -> ScrypticM a
+subNamespace :: Monad m => ScrypticM m a -> ScrypticM m a
 subNamespace m = do
     s0 <- get
     let nm0 = s0^.mNamespace
@@ -91,7 +93,7 @@ subNamespace m = do
     put $ s0 & mScryptHooks <>~ newHooks'
     return r
 
-applyNamespace :: String -> ScrypticM String
+applyNamespace :: Monad m => String -> ScrypticM m String
 applyNamespace key = do
     nm <- use mNamespace
     if null nm then return key else return $ concat [nm, ".", key]
