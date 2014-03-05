@@ -112,7 +112,7 @@ evalLine ln = case ln of
                 Just x  -> liftIO . void $ installInputWaiter inRef (out x)
                 Nothing -> doError $ concat
                             [ "can't trigger type ", show expectType ]
-        where traceMsg = concat [keyStr key,"; ",prettyPair "sync" sKey]
+        where traceMsg = concat [keyStr key,"; ",prettyPair "sync" $ unKey sKey]
 
 
     Watch key -> errCxt "watch" $ withInpKey key $ \ref ->
@@ -153,10 +153,10 @@ withInpKey key akt = do
             Nothing -> do
                 iMap <- liftIO $ readTVarIO inpRef
                 writeDebug $ "input keys: " ++ show (Map.keys iMap)
-                doError $ "can't find key " ++ key
+                doError $ "can't find key " ++ unKey key
             Just wkref -> liftIO (deRefWeak wkref) >>= \case
                 Just (Input ref) -> akt ref
-                Nothing  -> doError $ "internal: weak ref expired: " ++ key
+                Nothing  -> doError $ "internal: weak ref expired: " ++ unKey key
 
 withOutKey :: Key
            -> (forall a. (Typeable a, Read a)
@@ -168,7 +168,7 @@ withOutKey key akt = do
             Nothing -> do
                 oMap <- liftIO $ readTVarIO outRef
                 writeDebug $ "output keys: " ++ show (Map.keys oMap)
-                doError $ "can't find key " ++ key
+                doError $ "can't find key " ++ unKey key
             Just (Output expectType out _) -> akt expectType out
 
 dumpScrypt :: Scrypt -> ScryptEngineM ()
@@ -213,7 +213,7 @@ prettyPair :: String -> String -> String
 prettyPair spec lbl = concat [spec," <",lbl,">"]
 
 keyStr :: Key -> String
-keyStr = prettyPair "key"
+keyStr = prettyPair "key" . unKey
 valStr :: String -> String
 valStr = prettyPair "val"
 

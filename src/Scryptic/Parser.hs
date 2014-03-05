@@ -7,6 +7,7 @@ module Scryptic.Parser (
 
 import Scryptic.RuntimeOptions
 import Scryptic.Scrypt
+import Scryptic.Types
 
 import Control.Applicative ( Applicative(..), (<$>), (<$), (*>), liftA2)
 import Text.Parsec
@@ -27,7 +28,7 @@ parseFile file = parseScript <$> Text.readFile file
 -- `many` itself.
 parseBlock :: Parser ScryptBlock
 parseBlock =
-    mkBlock <$> optionMaybe (parseReservedKey "title" <* spacesComments)
+    mkBlock <$> optionMaybe (parseReservedBareKey "title" <* spacesComments)
             <*> many1 statementParsers
   where
     mkBlock Nothing xs = ScryptBlock xs
@@ -71,15 +72,21 @@ parseSleep = do
 
 parseOpt :: Parser ScryptStatement
 parseOpt = do
-    optName <- parseReservedKey "opt" <* spacesComments
+    optName <- parseReservedBareKey "opt" <* spacesComments
     optVal <- many (satisfy (not . isSpace))
     let msgStr = concat ["set <",optName,">  <",optVal,">"]
     flip SetOpt msgStr <$> getValuedOptionSetter optName optVal
                        <* spacesComments
 
-parseReservedKey :: String -> Parser String
-parseReservedKey reserved =
-    try (string reserved) *> spaces *> many (satisfy (not . isSpace))
+parseReservedKey :: String -> Parser Key
+parseReservedKey reserved = Key <$> parseReservedBareKey reserved
+
+parseReservedBareKey :: String -> Parser String
+parseReservedBareKey reserved =
+    try (string reserved)
+    *> spaces
+    *> many (satisfy (not . isSpace))
+
 
 -- Parse a (single-line) string literal
 parseString :: Parser String

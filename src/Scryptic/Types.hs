@@ -23,7 +23,11 @@ data Output = forall a. (Typeable a, Read a)
             => Output TypeRep (a -> IO ()) MkFinalizer
     deriving (Typeable)
 
-type Key = String
+newtype Key = Key {unKey :: String}
+    deriving (Eq, Show, Ord, Read)
+
+-- kind of jenky, but 'key' is to useful an identifier to make it an iso
+$(makeLensesWith (isoRules & lensIso .~ (const $ Just "keyy")) ''Key)
 
 data ScryptHooks = ScryptHooks
     { _inpMap :: Map Key Input
@@ -53,4 +57,4 @@ instance Monoid ScryptHooks where
 merge :: String -> Map Key a -> Map Key a -> Map Key a
 merge lbl = Map.unionWithKey (\k _ _ -> error $ concat
     [ "Scryptic: duplicate " , lbl
-    , " key `", k, "'" ] )
+    , " key `", k^.from keyy, "'" ] )
