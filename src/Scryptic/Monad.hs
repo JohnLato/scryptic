@@ -57,7 +57,7 @@ getScryptHooks m = (liftM . fmap) (view mScryptHooks)
 joinToEngine :: MonadIO m => ScryptEngine -> ScrypticM m a -> m a
 joinToEngine engine m = do
     (a,scryptHooks) <- getScryptHooks m
-    liftIO $ joinScryptEngine scryptHooks engine
+    liftIO $ joinScryptEngine engine scryptHooks
     return a
 
 scryptInput :: (Monad m, Typeable a, Read a) => String -> (a -> IO ())

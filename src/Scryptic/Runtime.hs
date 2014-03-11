@@ -58,8 +58,8 @@ runScrypt lbl scrypt sEngine = do
     outerCxt = if null lbl then id else errCxt lbl
 
 -- modify the inputs/outputs available to the ScryptEngine.
-joinScryptEngine :: ScryptHooks -> ScryptEngine -> IO ()
-joinScryptEngine scryptic sEngine = do
+joinScryptEngine :: ScryptEngine -> ScryptHooks -> IO ()
+joinScryptEngine sEngine scryptic = do
     let rState = sEngine^.seState
         remKey mp key = atomically $ modifyTVar mp (Map.delete key)
 
