@@ -116,8 +116,10 @@ evalLine ln = case ln of
 
 
     Watch key -> errCxt "watch" $ withInpKey key $ \ref ->
-        stepTrace traceMsg $ liftIO . atomically $ writeTVar ref print
+        stepTrace traceMsg $ liftIO . atomically $ writeTVar ref printMsg
         where traceMsg = keyStr key
+              printMsg x = putStrLn
+                  $ concat [ "<", unKey key, "> " , show x]
 
     Unwatch key -> errCxt "unwatch" $ withInpKey key $ \ref ->
         stepTrace traceMsg $ liftIO . atomically $ writeTVar ref nullAkt
