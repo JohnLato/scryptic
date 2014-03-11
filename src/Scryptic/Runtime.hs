@@ -94,43 +94,45 @@ doWithFlow = mapM_ doBlock
 
 evalLine :: ScryptStatement -> ScryptEngineM ()
 evalLine ln = case ln of
-    Wait key -> errCxt "wait" $ withInpKey key $ \ref -> stepTrace traceMsg
-        $ liftIO . void $ installInputWaiter ref (return ())
-        where traceMsg = keyStr key
+    Wait key -> stepTrace traceMsg . errCxt "wait" $ withInpKey key
+        $ \ref -> liftIO . void $ installInputWaiter ref (return ())
+        where traceMsg = concat ["wait: ", keyStr key ]
 
-    Write key val's -> errCxt "write" $ withOutKey key $
-        \expectType out -> stepTrace traceMsg $ case mRead val's of
+    Write key val's -> stepTrace traceMsg . errCxt "write"
+        $ withOutKey key $ \expectType out -> case mRead val's of
             Just x  -> liftIO . void $ out x
             Nothing -> doError $ concat
                   [ "can't read input `", val's
                   , "' as type ", show expectType ]
-        where traceMsg = concat [keyStr key,"; ",valStr val's]
+        where traceMsg = concat ["write ", keyStr key,"; ",valStr val's]
 
-    WriteSync key val's sKey -> errCxt "write" $ withInpKey sKey $ \inRef ->
-        errCxt "sync" $ withOutKey key $ \expectType out ->
-            stepTrace traceMsg $ case mRead val's of
+    WriteSync key val's sKey -> stepTrace traceMsg . errCxt "write"
+        $ withInpKey sKey $ \inRef -> errCxt "sync" $ withOutKey key
+            $ \expectType out -> case mRead val's of
                 Just x  -> liftIO . void $ installInputWaiter inRef (out x)
                 Nothing -> doError $ concat
-                            [ "can't trigger type ", show expectType ]
-        where traceMsg = concat [keyStr key,"; ",prettyPair "sync" $ unKey sKey]
+                                [ "can't trigger type ", show expectType ]
+        where traceMsg = concat
+                  ["write ", keyStr key,"; ",prettyPair "sync" $ unKey sKey]
 
 
-    Watch key -> errCxt "watch" $ withInpKey key $ \ref ->
-        stepTrace traceMsg $ liftIO . atomically $ writeTVar ref printMsg
-        where traceMsg = keyStr key
+    Watch key -> stepTrace traceMsg . errCxt "watch" $ withInpKey key
+        $ \ref -> liftIO . atomically $ writeTVar ref printMsg
+        where traceMsg =
+                  concat [ "watch: ", keyStr key ]
               printMsg x = putStrLn
                   $ concat [ "<", unKey key, "> " , show x]
 
-    Unwatch key -> errCxt "unwatch" $ withInpKey key $ \ref ->
-        stepTrace traceMsg $ liftIO . atomically $ writeTVar ref nullAkt
-        where traceMsg = keyStr key
+    Unwatch key -> stepTrace traceMsg . errCxt "unwatch" $ withInpKey key
+        $ \ref -> liftIO . atomically $ writeTVar ref nullAkt
+        where traceMsg = "unwatch: " ++ keyStr key
 
-    SetOpt f lbl -> errCxt "setopt" $ stepTrace lbl $ do
+    SetOpt f lbl -> stepTrace ("setopt: " ++ lbl) . errCxt "setopt" $ do
           optRef <- view rsOpts
           liftIO . atomically $ modifyTVar optRef (unSOA f)
 
-    Sleep nSecs -> errCxt "sleep" $ stepTrace ""
-        $ liftIO $ threadDelay (floor (nSecs*1000000))
+    Sleep nSecs -> stepTrace ("sleep: " ++ show nSecs) . errCxt "sleep"
+          .  liftIO $ threadDelay (floor (nSecs*1000000))
 
 installInputWaiter :: TVar (b -> IO ()) -> IO a -> IO b
 installInputWaiter ref preWait = do
