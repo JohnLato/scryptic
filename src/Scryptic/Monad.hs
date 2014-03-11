@@ -46,7 +46,7 @@ instance Monoid MState where
         -- namespace is notionally the same as 'Last String'
 
 newtype ScrypticM m a = ScrypticM { runSM :: StateT MState m a }
-    deriving (Functor, Applicative, Monad, MonadIO)
+    deriving (Functor, Applicative, Monad, MonadIO, MonadTrans)
 
 instance Monad m => MonadState MState (ScrypticM m) where
     get = ScrypticM get
