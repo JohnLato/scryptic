@@ -90,7 +90,8 @@ parseReservedBareKey reserved =
 
 -- Parse a (single-line) string literal
 parseString :: Parser String
-parseString = concat <$> between (char '"') (char '"' <?> "end of string")
+parseString =
+    (\xs -> '"': concat xs ++ "\"") <$> between (char '"') (char '"' <?> "end of string")
     (many stringChars)
   where
     stringChars = ((\a b -> [a,b]) <$> char '\\' <*> anyChar)
