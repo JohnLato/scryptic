@@ -13,6 +13,11 @@ module Scryptic.Monad (
   -- ** Using hooks
   joinToEngine,
   getScryptHooks,
+
+  -- ** implementation details
+  applyNamespace,
+  mScryptHooks,
+  mNamespace,
 ) where
 
 import Scryptic.Types
@@ -93,6 +98,8 @@ subNamespace m = do
     put $ s0 & mScryptHooks <>~ newHooks'
     return r
 
+-- | Modify a key by the current namespace.  You might need this
+-- if you're mixing 'Pure' calls with ScrypticM.
 applyNamespace :: Monad m => String -> ScrypticM m String
 applyNamespace key = do
     nm <- use mNamespace
