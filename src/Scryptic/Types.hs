@@ -3,6 +3,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+{-# OPTIONS -Wall #-}
 module Scryptic.Types where
 
 import Control.Concurrent.STM
@@ -26,7 +27,7 @@ data Output = forall a. (Typeable a, Read a)
 newtype Key = Key {unKey :: String}
     deriving (Eq, Show, Ord, Read)
 
--- kind of jenky, but 'key' is to useful an identifier to make it an iso
+-- kind of jenky, but 'key' is too useful an identifier to make it an iso
 $(makeLensesWith (isoRules & lensIso .~ (const $ Just "keyy")) ''Key)
 
 data ScryptHooks = ScryptHooks
@@ -58,3 +59,13 @@ merge :: String -> Map Key a -> Map Key a -> Map Key a
 merge lbl = Map.unionWithKey (\k _ _ -> error $ concat
     [ "Scryptic: duplicate " , lbl
     , " key `", k^.from keyy, "'" ] )
+
+data BlockConfig = BlockConfig
+    { _bcTitle :: Last String }
+    deriving (Eq, Show)
+
+instance Monoid BlockConfig where
+    mempty = BlockConfig mempty
+    BlockConfig tL `mappend` BlockConfig tR = BlockConfig (tL<>tR)
+
+$(makeLenses ''BlockConfig)

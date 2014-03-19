@@ -1,0 +1,44 @@
+entrypoints Scrypt, Block, Stmt ;
+
+OneBlock.   Scrypt  ::= Block;
+MultiBlock. Scrypt  ::= [Block];
+
+(:[]).      [Block] ::= "{" Block "}" ;
+(:).        [Block] ::= "{" Block "}" [Block];
+
+Block.      Block   ::= [BlockOpt] [Stmt] ;
+
+[].         [BlockOpt] ::= ;
+(:).        [BlockOpt] ::= BlockOpt ";" [BlockOpt];
+
+TitleOpt.   BlockOpt ::= "title" Ident ;
+
+[].         [Stmt]  ::= ;
+(:).        [Stmt]  ::= Stmt ";" [Stmt];
+
+Wait.       Stmt    ::= "wait" SKey ;
+Write.      Stmt    ::= "write" SKey SOptVal ;
+WriteSync.  Stmt    ::= "write" SKey SOptVal "sync" SKey ;
+Watch.      Stmt    ::= "watch" SKey ;
+Unwatch.    Stmt    ::= "unwatch" SKey ;
+Sleep.      Stmt    ::= "sleep" SNum ;
+SetOpt.     Stmt    ::= "opt" SKey Ident ;
+
+SKey.       SKey    ::= [NameQual] Ident ;
+
+[].         [NameQual]  ::= ;
+(:).        [NameQual]  ::= NameQual "." [NameQual] ;
+
+NameQual.   NameQual    ::= Ident ;
+
+SOptNum.    SOptVal ::= SNum;
+SOptStr.    SOptVal ::= String;
+SOptNone.   SOptVal ::= ;
+
+IntNum.     SNum    ::= Integer;
+DubNum.     SNum    ::= Double;
+
+comment "--";
+comment "{-" "-}";
+
+layout toplevel;

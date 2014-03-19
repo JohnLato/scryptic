@@ -1,4 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS -Wall #-}
 module Scryptic.Pure (
   scryptInput,
   scryptOutput,

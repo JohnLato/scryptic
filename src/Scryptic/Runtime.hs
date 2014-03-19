@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS -Wall #-}
 module Scryptic.Runtime (
@@ -22,9 +23,11 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
 import Control.Lens
 import Control.Monad.Reader
+import Data.Foldable (foldMap)
 import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Monoid
 import Data.Typeable
 
 data RuntimeState = RuntimeState
@@ -86,53 +89,64 @@ instance MonadReader RuntimeState ScryptEngineM where
 -- currently the only flow control construct I have is the script title.
 -- I guess more will likely be added if more power is needed.
 doWithFlow :: Scrypt -> ScryptEngineM ()
-doWithFlow = mapM_ doBlock
+doWithFlow = mapM_ doBlock . getBlocks
   where
-    doBlock x = case x of
-        ScryptBlock stmts     -> mapM_ evalLine stmts
-        TitledBlock str stmts -> errCxt str (mapM_ evalLine stmts)
+    doBlock (Block opts stmts) =
+        let cfg = foldMap mkConfig opts
+        in  runCfg cfg stmts
+    runCfg bcCfg stmts = case bcCfg^.bcTitle.to getLast of
+        Nothing -> mapM_ evalLine stmts
+        Just title -> errCxt title (mapM_ evalLine stmts)
 
-evalLine :: ScryptStatement -> ScryptEngineM ()
+evalLine :: Stmt -> ScryptEngineM ()
 evalLine ln = case ln of
-    Wait key -> stepTrace traceMsg . errCxt "wait" $ withInpKey key
+    Wait (sKey->key) -> stepTrace traceMsg . errCxt "wait" $ withInpKey key
         $ \ref -> liftIO . void $ installInputWaiter ref (return ())
         where traceMsg = concat ["wait: ", keyStr key ]
 
-    Write key val's -> stepTrace traceMsg . errCxt "write"
-        $ withOutKey key $ \expectType out -> case mRead val's of
+    Write (sKey->key) val's -> stepTrace traceMsg . errCxt "write"
+        $ withOutKey key $ \expectType out -> case sOptVal val's of
             Just x  -> liftIO . void $ out x
             Nothing -> doError $ concat
-                  [ "can't read input `", val's
+                  [ "can't read input `", show val's
                   , "' as type ", show expectType ]
-        where traceMsg = concat ["write ", keyStr key,"; ",valStr val's]
+        where traceMsg = concat ["write ", keyStr key,"; ",valStr $ show val's]
 
-    WriteSync key val's sKey -> stepTrace traceMsg . errCxt "write"
-        $ withInpKey sKey $ \inRef -> errCxt "sync" $ withOutKey key
-            $ \expectType out -> case mRead val's of
+    WriteSync (sKey->key) val's (sKey->syncKey) ->
+        stepTrace traceMsg . errCxt "write" $ withInpKey syncKey $ \inRef ->
+          errCxt "sync" $ withOutKey key $ \expectType out ->
+              case sOptVal val's of
                 Just x  -> liftIO . void $ installInputWaiter inRef (out x)
                 Nothing -> doError $ concat
                                 [ "can't trigger type ", show expectType ]
         where traceMsg = concat
-                  ["write ", keyStr key,"; ",prettyPair "sync" $ unKey sKey]
+                  ["write ", keyStr key,"; ",prettyPair "sync" $ unKey syncKey]
 
 
-    Watch key -> stepTrace traceMsg . errCxt "watch" $ withInpKey key
-        $ \ref -> liftIO . atomically $ writeTVar ref printMsg
+    Watch (sKey->key) -> stepTrace traceMsg . errCxt "watch"
+        $ withInpKey key $ \ref ->
+            liftIO . atomically $ writeTVar ref printMsg
         where traceMsg =
                   concat [ "watch: ", keyStr key ]
               printMsg x = putStrLn
                   $ concat [ "<", unKey key, "> " , show x]
 
-    Unwatch key -> stepTrace traceMsg . errCxt "unwatch" $ withInpKey key
-        $ \ref -> liftIO . atomically $ writeTVar ref nullAkt
+    Unwatch (sKey->key) -> stepTrace traceMsg . errCxt "unwatch"
+        $ withInpKey key $ \ref ->
+            liftIO . atomically $ writeTVar ref nullAkt
         where traceMsg = "unwatch: " ++ keyStr key
 
-    SetOpt f lbl -> stepTrace ("setopt: " ++ lbl) . errCxt "setopt" $ do
-          optRef <- view rsOpts
-          liftIO . atomically $ modifyTVar optRef (unSOA f)
+    SetOpt (keyStr.sKey->key) ((^.identS)->val) ->
+        stepTrace traceMsg . errCxt "setopt" $ case getValuedOptionSetter key val of
+          Left err -> doError $ concat
+                                [ "can't find option setter: ", err ]
+          Right f -> do
+              optRef <- view rsOpts
+              liftIO . atomically $ modifyTVar optRef (unSOA f)
+        where traceMsg = concat ["setopt ", key,"; ",valStr val]
 
-    Sleep nSecs -> stepTrace ("sleep: " ++ show nSecs) . errCxt "sleep"
-          .  liftIO $ threadDelay (floor (nSecs*1000000))
+    Sleep (sNum->nSecs) -> stepTrace ("sleep: " ++ show nSecs)
+          . errCxt "sleep" . liftIO $ threadDelay (floor (nSecs*1000000))
 
 installInputWaiter :: TVar (b -> IO ()) -> IO a -> IO b
 installInputWaiter ref preWait = do
@@ -179,7 +193,7 @@ dumpScrypt :: Scrypt -> ScryptEngineM ()
 dumpScrypt scrypt = do
     opts <- view rsOpts
     showDump <- opts^!act (liftIO . readTVarIO) . soDumpScrypts
-    when showDump $ liftIO . putStrLn . unlines $ map show scrypt
+    when showDump $ liftIO . putStrLn $ show scrypt
 
 doError :: String -> ScryptEngineM ()
 doError err = do

@@ -1,27 +1,62 @@
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Scryptic.Scrypt
-where
+{-# OPTIONS -Wall #-}
+module Scryptic.Scrypt (
+  getBlocks,
+  sKey,
+  sOptVal,
+  sNum,
+  identS,
+  titleOpt,
+  nameQual,
+  mkConfig,
+  module Scryptic.Language.AbsScrypt,
+) where
 
 import Scryptic.Types
 import Scryptic.RuntimeOptions
+import Scryptic.Language.AbsScrypt
+import Control.Lens
+import Data.List (intercalate)
+import Data.Monoid
 
-type Scrypt = [ScryptBlock]
+$(makeIso ''Ident)
+$(makeIso ''BlockOpt)
+$(makeIso ''NameQual)
 
-data ScryptBlock
-  = ScryptBlock [ScryptStatement]
-  | TitledBlock String [ScryptStatement]
-  deriving (Show)
+{-
+ - bnfc is currently broken with bytestrings+layout, so
+ - using String parser until that's fixed. (probably by me :o )
 
-data ScryptStatement
-  = Wait Key
-  | Write Key String
-  | WriteSync Key String Key{-sync-}
-  | Watch Key
-  | Unwatch Key
-  | Sleep Double
-  | SetOpt ScryptOptAdj String
+-- alex assumes UTF8, so we do too.
+identS :: Iso' Ident String
+identS = from $ packed . iso Text.encodeUtf8 Text.decodeUtf8 . ident
+-}
 
-deriving instance Show ScryptStatement
+identS :: Iso' Ident String
+identS = from ident
+
+getBlocks :: Scrypt -> [Block]
+getBlocks (OneBlock block) = [block]
+getBlocks (MultiBlock blocks) = blocks
+
+sKey :: SKey -> Key
+sKey (SKey quals nm) = Key $ intercalate "."
+    $ quals^.mapping (from nameQual . identS) ++ [nm^.identS]
+
+sOptVal :: Read a => SOptVal -> Maybe a
+sOptVal sov = case sov of
+    SOptNum num -> mRead $ show $ sNum num
+    SOptStr str -> mRead $ "\\\"" ++ str ++ "\\\""
+    SOptNone -> mRead "()"
+
+sNum :: SNum -> Double
+sNum n = case n of
+    IntNum int -> fromIntegral int
+    DubNum d   -> d
+
+mkConfig :: BlockOpt -> BlockConfig
+mkConfig (TitleOpt idnt) = bcTitle.unwrapped._Just.from identS .~ idnt $ mempty

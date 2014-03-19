@@ -1,6 +1,7 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
 
+{-# OPTIONS -Wall #-}
 module Scryptic.Weak (
   mkWeakTVar,
   mkWeakTVarKey,

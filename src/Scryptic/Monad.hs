@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS -Wall #-}
 module Scryptic.Monad (
   -- * Monadic interface for hooking up the ScryptEngine
   ScrypticM(..),

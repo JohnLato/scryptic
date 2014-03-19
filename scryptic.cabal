@@ -10,14 +10,18 @@ maintainer:          jwlato@gmail.com
 copyright:           Tsuru Capital, 2014
 category:            Language
 build-type:          Simple
--- extra-source-files:  
+extra-source-files:  src/Scryptic/Language/DocScrypt.txt, src/Scrypt.cf
 cabal-version:       >=1.16
 
 library
-  ghc-options:         -Wall
   exposed-modules:     Scryptic,
+                       Scryptic.Language.AbsScrypt
+                       Scryptic.Language.ErrM
+                       Scryptic.Language.LayoutScrypt
+                       Scryptic.Language.LexScrypt
+                       Scryptic.Language.ParScrypt
+                       Scryptic.Language.PrintScrypt
                        Scryptic.Monad,
-                       Scryptic.Parser,
                        Scryptic.Pure,
                        Scryptic.Runtime,
                        Scryptic.RuntimeOptions,
@@ -35,10 +39,12 @@ library
                        StandaloneDeriving,
                        TemplateHaskell,
                        DeriveDataTypeable,
+                       DeriveGeneric,
                        ExistentialQuantification,
                        LambdaCase,
                        RankNTypes
   build-depends:       base >=4.6 && <4.8,
+                       array >= 0.4 && < 0.6,
                        mtl >=2.1 && <2.2,
                        lens >=3.8 && <4.1,
                        containers >=0.5 && <0.6,
@@ -48,3 +54,4 @@ library
                        text >=0.11 && <2.0
   hs-source-dirs:      src
   default-language:    Haskell2010
+  build-tools:         happy, alex

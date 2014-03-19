@@ -6,6 +6,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+{-# OPTIONS -Wall #-}
 module Scryptic.RuntimeOptions (
     ScryptOpt(..),
     defaultScryptOpts,
@@ -27,9 +28,7 @@ module Scryptic.RuntimeOptions (
 import Control.Lens
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Functor.Identity
 import Data.Typeable
-import Text.Parsec (Parsec, choice, Stream)
 
 #ifndef MIN_VERSION_lens
 #define MIN_VERSION_lens(x,y,z) 0
@@ -71,27 +70,24 @@ boolOptionMap = Map.fromList
     , ("debug", LENS soDebug)
     , ("dumpScrypts", LENS soDumpScrypts) ]
 
-getValuedOptionSetter :: (Stream s Identity t)
-                      => String -> String
-                      -> Parsec s u ScryptOptAdj
-getValuedOptionSetter key val = choice
-    [ getValuedOptionSetter' boolOptionMap key val ]
+getValuedOptionSetter :: String -> String -> Either String ScryptOptAdj
+getValuedOptionSetter key val = 
+     getValuedOptionSetter' boolOptionMap key val 
 -- for now there are only boolean options, but if I add more
--- (e.g. verbosity) this will handle it easily
+-- (e.g. verbosity) it can be handled here (e.g. with `mplus`)
 
-getValuedOptionSetter' :: forall s a u t. (Typeable a, Read a
-                           , Stream s Identity t)
+getValuedOptionSetter' :: forall a. (Typeable a, Read a)
                        => Map String (ReifiedLens' ScryptOpt a)
                        -> String -> String
-                       -> Parsec s u ScryptOptAdj
+                       -> Either String ScryptOptAdj
 getValuedOptionSetter' optMap key val = case Map.lookup key optMap of
-    Nothing -> fail $ "scryptic: no option named " ++ key
+    Nothing -> Left $ "scryptic: no option named " ++ key
     Just theLens -> case mRead val of
         Just b  -> return . ScryptOptAdj $ (UNLENS theLens) .~ b
         Nothing -> failKeyVal key val (show $ typeOf (undefined :: a))
 
-failKeyVal :: Monad m => String -> String -> String -> m a
-failKeyVal key val msg = fail $ concat
+failKeyVal :: String -> String -> String -> Either String a
+failKeyVal key val msg = Left $ concat
     [ "value <", val, "> for key <",key,"> doesn't appear to be a ", msg ]
 
 mRead :: Read a => String -> Maybe a
