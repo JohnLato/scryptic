@@ -9,6 +9,7 @@ module Scryptic.Scrypt (
   sKey,
   sOptVal,
   sNum,
+  sNumD,
   identS,
   titleOpt,
   nameQual,
@@ -19,9 +20,11 @@ module Scryptic.Scrypt (
 import Scryptic.Types
 import Scryptic.RuntimeOptions
 import Scryptic.Language.AbsScrypt
+import Control.Applicative
 import Control.Lens
 import Data.List (intercalate)
 import Data.Monoid
+import Data.Typeable
 
 $(makeIso ''Ident)
 $(makeIso ''BlockOpt)
@@ -47,16 +50,24 @@ sKey :: SKey -> Key
 sKey (SKey quals nm) = Key $ intercalate "."
     $ quals^.mapping (from nameQual . identS) ++ [nm^.identS]
 
-sOptVal :: Read a => SOptVal -> Maybe a
+sOptVal :: Typeable a => SOptVal -> Maybe a
 sOptVal sov = case sov of
-    SOptNum num -> mRead $ show $ sNum num
-    SOptStr str -> mRead $ "\\\"" ++ str ++ "\\\""
-    SOptNone -> mRead "()"
+    SOptNum num -> sNum num
+    SOptStr str -> cast str
+    SOptNone -> cast ()
 
-sNum :: SNum -> Double
+sNum :: (Typeable a) => SNum -> Maybe a
 sNum n = case n of
+    IntNum int -> cast int
+                  <|> cast (fromIntegral int::Int)
+                  <|> cast (fromIntegral int::Double)
+    DubNum d   -> cast d
+
+sNumD :: SNum -> Double
+sNumD n = case n of
     IntNum int -> fromIntegral int
     DubNum d   -> d
+
 
 mkConfig :: BlockOpt -> BlockConfig
 mkConfig (TitleOpt idnt) = bcTitle.unwrapped._Just.from identS .~ idnt $ mempty

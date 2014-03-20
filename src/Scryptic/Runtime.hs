@@ -145,7 +145,7 @@ evalLine ln = case ln of
               liftIO . atomically $ modifyTVar optRef (unSOA f)
         where traceMsg = concat ["setopt ", key,"; ",valStr val]
 
-    Sleep (sNum->nSecs) -> stepTrace ("sleep: " ++ show nSecs)
+    Sleep (sNumD->nSecs) -> stepTrace ("sleep: " ++ show nSecs)
           . errCxt "sleep" . liftIO $ threadDelay (floor (nSecs*1000000))
 
 installInputWaiter :: TVar (b -> IO ()) -> IO a -> IO b
