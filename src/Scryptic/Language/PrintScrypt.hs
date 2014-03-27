@@ -107,9 +107,9 @@ instance Print BlockOpt where
 
 instance Print Stmt where
   prt i e = case e of
-   Wait skey -> prPrec i 0 (concatD [doc (showString "wait") , prt 0 skey])
+   Wait expr -> prPrec i 0 (concatD [doc (showString "wait") , prt 0 expr])
    Write skey soptval -> prPrec i 0 (concatD [doc (showString "write") , prt 0 skey , prt 0 soptval])
-   WriteSync skey0 soptval skey -> prPrec i 0 (concatD [doc (showString "write") , prt 0 skey0 , prt 0 soptval , doc (showString "sync") , prt 0 skey])
+   WriteSync skey soptval expr -> prPrec i 0 (concatD [doc (showString "write") , prt 0 skey , prt 0 soptval , doc (showString "sync") , prt 0 expr])
    Watch skey -> prPrec i 0 (concatD [doc (showString "watch") , prt 0 skey])
    Unwatch skey -> prPrec i 0 (concatD [doc (showString "unwatch") , prt 0 skey])
    Sleep snum -> prPrec i 0 (concatD [doc (showString "sleep") , prt 0 snum])
@@ -118,6 +118,16 @@ instance Print Stmt where
   prtList es = case es of
    [] -> (concatD [])
    x:xs -> (concatD [prt 0 x , doc (showString ";") , prt 0 xs])
+
+instance Print Expr where
+  prt i e = case e of
+   OrExpr expr0 expr -> prPrec i 0 (concatD [prt 0 expr0 , doc (showString "||") , prt 1 expr])
+   AndExpr expr0 expr -> prPrec i 1 (concatD [prt 1 expr0 , doc (showString "&&") , prt 2 expr])
+   CmpExpr expr0 cmpop expr -> prPrec i 2 (concatD [prt 5 expr0 , prt 0 cmpop , prt 4 expr])
+   RCmpExpr sval0 cmpop1 skey cmpop sval -> prPrec i 3 (concatD [prt 0 sval0 , prt 0 cmpop1 , prt 0 skey , prt 0 cmpop , prt 0 sval])
+   RConstExpr sval -> prPrec i 4 (concatD [prt 0 sval])
+   KeyExpr skey -> prPrec i 5 (concatD [prt 0 skey])
+
 
 instance Print SKey where
   prt i e = case e of
@@ -134,15 +144,30 @@ instance Print NameQual where
 
 instance Print SOptVal where
   prt i e = case e of
-   SOptNum snum -> prPrec i 0 (concatD [prt 0 snum])
-   SOptStr str -> prPrec i 0 (concatD [prt 0 str])
+   SOptVal sval -> prPrec i 0 (concatD [prt 0 sval])
    SOptNone  -> prPrec i 0 (concatD [])
+
+
+instance Print SVal where
+  prt i e = case e of
+   SValNum snum -> prPrec i 0 (concatD [prt 0 snum])
+   SValStr str -> prPrec i 0 (concatD [prt 0 str])
 
 
 instance Print SNum where
   prt i e = case e of
    IntNum n -> prPrec i 0 (concatD [prt 0 n])
    DubNum d -> prPrec i 0 (concatD [prt 0 d])
+
+
+instance Print CmpOp where
+  prt i e = case e of
+   EqOp  -> prPrec i 0 (concatD [doc (showString "==")])
+   NEqOp  -> prPrec i 0 (concatD [doc (showString "/=")])
+   LtOp  -> prPrec i 0 (concatD [doc (showString "<")])
+   GtOp  -> prPrec i 0 (concatD [doc (showString ">")])
+   LEqOp  -> prPrec i 0 (concatD [doc (showString "<=")])
+   GEqOp  -> prPrec i 0 (concatD [doc (showString ">=")])
 
 
 

@@ -186,18 +186,28 @@ sToken :: Position -> String -> Token
 sToken p s = PT p (TS s i)
   where
     i = case s of
-      "." -> 1
-      ";" -> 2
-      "opt" -> 3
-      "sleep" -> 4
-      "sync" -> 5
-      "title" -> 6
-      "unwatch" -> 7
-      "wait" -> 8
-      "watch" -> 9
-      "write" -> 10
-      "{" -> 11
-      "}" -> 12
+      "&&" -> 1
+      "(" -> 2
+      ")" -> 3
+      "." -> 4
+      "/=" -> 5
+      ";" -> 6
+      "<" -> 7
+      "<=" -> 8
+      "==" -> 9
+      ">" -> 10
+      ">=" -> 11
+      "opt" -> 12
+      "sleep" -> 13
+      "sync" -> 14
+      "title" -> 15
+      "unwatch" -> 16
+      "wait" -> 17
+      "watch" -> 18
+      "write" -> 19
+      "{" -> 20
+      "||" -> 21
+      "}" -> 22
       _ -> error $ "not a reserved word: " ++ show s
 
 -- | Get the position of a token.

@@ -32,13 +32,23 @@ transBlockOpt x = case x of
 
 transStmt :: Stmt -> Result
 transStmt x = case x of
-  Wait skey  -> failure x
+  Wait expr  -> failure x
   Write skey soptval  -> failure x
-  WriteSync skey1 soptval2 skey3  -> failure x
+  WriteSync skey soptval expr  -> failure x
   Watch skey  -> failure x
   Unwatch skey  -> failure x
   Sleep snum  -> failure x
   SetOpt skey id  -> failure x
+
+
+transExpr :: Expr -> Result
+transExpr x = case x of
+  OrExpr expr1 expr2  -> failure x
+  AndExpr expr1 expr2  -> failure x
+  CmpExpr expr1 cmpop2 expr3  -> failure x
+  RCmpExpr sval1 cmpop2 skey3 cmpop4 sval5  -> failure x
+  RConstExpr sval  -> failure x
+  KeyExpr skey  -> failure x
 
 
 transSKey :: SKey -> Result
@@ -53,15 +63,30 @@ transNameQual x = case x of
 
 transSOptVal :: SOptVal -> Result
 transSOptVal x = case x of
-  SOptNum snum  -> failure x
-  SOptStr str  -> failure x
+  SOptVal sval  -> failure x
   SOptNone  -> failure x
+
+
+transSVal :: SVal -> Result
+transSVal x = case x of
+  SValNum snum  -> failure x
+  SValStr str  -> failure x
 
 
 transSNum :: SNum -> Result
 transSNum x = case x of
   IntNum n  -> failure x
   DubNum d  -> failure x
+
+
+transCmpOp :: CmpOp -> Result
+transCmpOp x = case x of
+  EqOp  -> failure x
+  NEqOp  -> failure x
+  LtOp  -> failure x
+  GtOp  -> failure x
+  LEqOp  -> failure x
+  GEqOp  -> failure x
 
 
 

@@ -22,13 +22,22 @@ data BlockOpt =
   deriving (Eq,Ord,Show,Data,Typeable,Generic)
 
 data Stmt =
-   Wait SKey
+   Wait Expr
  | Write SKey SOptVal
- | WriteSync SKey SOptVal SKey
+ | WriteSync SKey SOptVal Expr
  | Watch SKey
  | Unwatch SKey
  | Sleep SNum
  | SetOpt SKey Ident
+  deriving (Eq,Ord,Show,Data,Typeable,Generic)
+
+data Expr =
+   OrExpr Expr Expr
+ | AndExpr Expr Expr
+ | CmpExpr Expr CmpOp Expr
+ | RCmpExpr SVal CmpOp SKey CmpOp SVal
+ | RConstExpr SVal
+ | KeyExpr SKey
   deriving (Eq,Ord,Show,Data,Typeable,Generic)
 
 data SKey =
@@ -40,13 +49,26 @@ data NameQual =
   deriving (Eq,Ord,Show,Data,Typeable,Generic)
 
 data SOptVal =
-   SOptNum SNum
- | SOptStr String
+   SOptVal SVal
  | SOptNone
+  deriving (Eq,Ord,Show,Data,Typeable,Generic)
+
+data SVal =
+   SValNum SNum
+ | SValStr String
   deriving (Eq,Ord,Show,Data,Typeable,Generic)
 
 data SNum =
    IntNum Integer
  | DubNum Double
+  deriving (Eq,Ord,Show,Data,Typeable,Generic)
+
+data CmpOp =
+   EqOp
+ | NEqOp
+ | LtOp
+ | GtOp
+ | LEqOp
+ | GEqOp
   deriving (Eq,Ord,Show,Data,Typeable,Generic)
 

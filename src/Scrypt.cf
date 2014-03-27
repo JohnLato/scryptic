@@ -16,13 +16,27 @@ TitleOpt.   BlockOpt ::= "title" Ident ;
 [].         [Stmt]  ::= ;
 (:).        [Stmt]  ::= Stmt ";" [Stmt];
 
-Wait.       Stmt    ::= "wait" SKey ;
+Wait.       Stmt    ::= "wait" Expr ;
 Write.      Stmt    ::= "write" SKey SOptVal ;
-WriteSync.  Stmt    ::= "write" SKey SOptVal "sync" SKey ;
+WriteSync.  Stmt    ::= "write" SKey SOptVal "sync" Expr ;
 Watch.      Stmt    ::= "watch" SKey ;
 Unwatch.    Stmt    ::= "unwatch" SKey ;
 Sleep.      Stmt    ::= "sleep" SNum ;
 SetOpt.     Stmt    ::= "opt" SKey Ident ;
+
+OrExpr.     Expr    ::= Expr "||" Expr1;
+AndExpr.    Expr1   ::= Expr1 "&&" Expr2;
+CmpExpr.    Expr2   ::= Expr5 CmpOp Expr4;
+RCmpExpr.   Expr3   ::= SVal CmpOp SKey CmpOp SVal;
+RConstExpr. Expr4   ::= SVal ;
+KeyExpr.    Expr5   ::= SKey ;
+
+_.          Expr    ::= Expr1;
+_.          Expr1   ::= Expr2;
+_.          Expr2   ::= Expr3;
+_.          Expr3   ::= Expr4;
+_.          Expr4   ::= Expr5;
+_.          Expr5   ::= "(" Expr ")" ;
 
 SKey.       SKey    ::= [NameQual] Ident ;
 
@@ -31,12 +45,21 @@ SKey.       SKey    ::= [NameQual] Ident ;
 
 NameQual.   NameQual    ::= Ident ;
 
-SOptNum.    SOptVal ::= SNum;
-SOptStr.    SOptVal ::= String;
+SOptVal.    SOptVal ::= SVal;
 SOptNone.   SOptVal ::= ;
+
+SValNum.    SVal    ::= SNum;
+SValStr.    SVal    ::= String;
 
 IntNum.     SNum    ::= Integer;
 DubNum.     SNum    ::= Double;
+
+EqOp.       CmpOp   ::= "==";
+NEqOp.      CmpOp   ::= "/=";
+LtOp.       CmpOp   ::= "<";
+GtOp.       CmpOp   ::= ">";
+LEqOp.      CmpOp   ::= "<=";
+GEqOp.      CmpOp   ::= ">=";
 
 comment "--";
 comment "{-" "-}";

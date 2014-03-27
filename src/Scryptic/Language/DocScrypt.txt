@@ -41,7 +41,10 @@ The reserved words used in Scrypt are the following:
   | ``unwatch`` | ``wait`` | ``watch`` | ``write``
 
 The symbols used in Scrypt are the following:
-  | { | } | ; | .
+  | { | } | ; | ||
+  | && | ( | ) | .
+  | == | /= | < | >
+  | <= | >= |  | 
 
 ===Comments===
 Single-line comments begin with --.Multiple-line comments are  enclosed with {- and -}.
@@ -62,21 +65,40 @@ All other symbols are terminals.
   | //BlockOpt// | -> | ``title`` //Ident// 
   | //[Stmt]// | -> | **eps**
   |  |  **|**  | //Stmt// ``;`` //[Stmt]// 
-  | //Stmt// | -> | ``wait`` //SKey// 
+  | //Stmt// | -> | ``wait`` //Expr// 
   |  |  **|**  | ``write`` //SKey// //SOptVal// 
-  |  |  **|**  | ``write`` //SKey// //SOptVal// ``sync`` //SKey// 
+  |  |  **|**  | ``write`` //SKey// //SOptVal// ``sync`` //Expr// 
   |  |  **|**  | ``watch`` //SKey// 
   |  |  **|**  | ``unwatch`` //SKey// 
   |  |  **|**  | ``sleep`` //SNum// 
   |  |  **|**  | ``opt`` //SKey// //Ident// 
+  | //Expr// | -> | //Expr// ``||`` //Expr1// 
+  |  |  **|**  | //Expr1// 
+  | //Expr1// | -> | //Expr1// ``&&`` //Expr2// 
+  |  |  **|**  | //Expr2// 
+  | //Expr2// | -> | //Expr5// //CmpOp// //Expr4// 
+  |  |  **|**  | //Expr3// 
+  | //Expr3// | -> | //SVal// //CmpOp// //SKey// //CmpOp// //SVal// 
+  |  |  **|**  | //Expr4// 
+  | //Expr4// | -> | //SVal// 
+  |  |  **|**  | //Expr5// 
+  | //Expr5// | -> | //SKey// 
+  |  |  **|**  | ``(`` //Expr// ``)`` 
   | //SKey// | -> | //[NameQual]// //Ident// 
   | //[NameQual]// | -> | **eps**
   |  |  **|**  | //NameQual// ``.`` //[NameQual]// 
   | //NameQual// | -> | //Ident// 
-  | //SOptVal// | -> | //SNum// 
-  |  |  **|**  | //String// 
+  | //SOptVal// | -> | //SVal// 
   |  |  **|**  | **eps**
+  | //SVal// | -> | //SNum// 
+  |  |  **|**  | //String// 
   | //SNum// | -> | //Integer// 
   |  |  **|**  | //Double// 
+  | //CmpOp// | -> | ``==`` 
+  |  |  **|**  | ``/=`` 
+  |  |  **|**  | ``<`` 
+  |  |  **|**  | ``>`` 
+  |  |  **|**  | ``<=`` 
+  |  |  **|**  | ``>=`` 
 
 

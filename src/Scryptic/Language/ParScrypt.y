@@ -17,18 +17,28 @@ import Scryptic.Language.ErrM
 %tokentype { Token }
 
 %token 
- '.' { PT _ (TS _ 1) }
- ';' { PT _ (TS _ 2) }
- 'opt' { PT _ (TS _ 3) }
- 'sleep' { PT _ (TS _ 4) }
- 'sync' { PT _ (TS _ 5) }
- 'title' { PT _ (TS _ 6) }
- 'unwatch' { PT _ (TS _ 7) }
- 'wait' { PT _ (TS _ 8) }
- 'watch' { PT _ (TS _ 9) }
- 'write' { PT _ (TS _ 10) }
- '{' { PT _ (TS _ 11) }
- '}' { PT _ (TS _ 12) }
+ '&&' { PT _ (TS _ 1) }
+ '(' { PT _ (TS _ 2) }
+ ')' { PT _ (TS _ 3) }
+ '.' { PT _ (TS _ 4) }
+ '/=' { PT _ (TS _ 5) }
+ ';' { PT _ (TS _ 6) }
+ '<' { PT _ (TS _ 7) }
+ '<=' { PT _ (TS _ 8) }
+ '==' { PT _ (TS _ 9) }
+ '>' { PT _ (TS _ 10) }
+ '>=' { PT _ (TS _ 11) }
+ 'opt' { PT _ (TS _ 12) }
+ 'sleep' { PT _ (TS _ 13) }
+ 'sync' { PT _ (TS _ 14) }
+ 'title' { PT _ (TS _ 15) }
+ 'unwatch' { PT _ (TS _ 16) }
+ 'wait' { PT _ (TS _ 17) }
+ 'watch' { PT _ (TS _ 18) }
+ 'write' { PT _ (TS _ 19) }
+ '{' { PT _ (TS _ 20) }
+ '||' { PT _ (TS _ 21) }
+ '}' { PT _ (TS _ 22) }
 
 L_ident  { PT _ (TV $$) }
 L_quoted { PT _ (TL $$) }
@@ -73,13 +83,43 @@ ListStmt : {- empty -} { [] }
 
 
 Stmt :: { Stmt }
-Stmt : 'wait' SKey { Wait $2 } 
+Stmt : 'wait' Expr { Wait $2 } 
   | 'write' SKey SOptVal { Write $2 $3 }
-  | 'write' SKey SOptVal 'sync' SKey { WriteSync $2 $3 $5 }
+  | 'write' SKey SOptVal 'sync' Expr { WriteSync $2 $3 $5 }
   | 'watch' SKey { Watch $2 }
   | 'unwatch' SKey { Unwatch $2 }
   | 'sleep' SNum { Sleep $2 }
   | 'opt' SKey Ident { SetOpt $2 $3 }
+
+
+Expr :: { Expr }
+Expr : Expr '||' Expr1 { OrExpr $1 $3 } 
+  | Expr1 { $1 }
+
+
+Expr1 :: { Expr }
+Expr1 : Expr1 '&&' Expr2 { AndExpr $1 $3 } 
+  | Expr2 { $1 }
+
+
+Expr2 :: { Expr }
+Expr2 : Expr5 CmpOp Expr4 { CmpExpr $1 $2 $3 } 
+  | Expr3 { $1 }
+
+
+Expr3 :: { Expr }
+Expr3 : SVal CmpOp SKey CmpOp SVal { RCmpExpr $1 $2 $3 $4 $5 } 
+  | Expr4 { $1 }
+
+
+Expr4 :: { Expr }
+Expr4 : SVal { RConstExpr $1 } 
+  | Expr5 { $1 }
+
+
+Expr5 :: { Expr }
+Expr5 : SKey { KeyExpr $1 } 
+  | '(' Expr ')' { $2 }
 
 
 SKey :: { SKey }
@@ -96,14 +136,27 @@ NameQual : Ident { NameQual $1 }
 
 
 SOptVal :: { SOptVal }
-SOptVal : SNum { SOptNum $1 } 
-  | String { SOptStr $1 }
+SOptVal : SVal { SOptVal $1 } 
   | {- empty -} { SOptNone }
+
+
+SVal :: { SVal }
+SVal : SNum { SValNum $1 } 
+  | String { SValStr $1 }
 
 
 SNum :: { SNum }
 SNum : Integer { IntNum $1 } 
   | Double { DubNum $1 }
+
+
+CmpOp :: { CmpOp }
+CmpOp : '==' { EqOp } 
+  | '/=' { NEqOp }
+  | '<' { LtOp }
+  | '>' { GtOp }
+  | '<=' { LEqOp }
+  | '>=' { GEqOp }
 
 
 
