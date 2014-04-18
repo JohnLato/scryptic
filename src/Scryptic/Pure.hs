@@ -25,7 +25,7 @@ scryptInput (mkKey -> key) akt =
     in mempty & outMap .~ Map.singleton key (Output typeHint akt Nothing)
 
 -- | Scrypt an output from an application
-scryptOutput :: (Typeable a, Read a, Show a)
+scryptOutput :: (Typeable a, Read a, Show a, Ord a)
              => String -> IO (a->IO(),ScryptHooks)
 scryptOutput (mkKey -> key) = do
     ref <- newTVarIO (const $ return ())

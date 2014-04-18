@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -29,6 +30,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid
 import Data.Typeable
+import Control.Monad.Catch as E
 
 data RuntimeState = RuntimeState
     { _rsInpMap :: TVar (Map Key (Weak Input))
@@ -79,7 +81,7 @@ joinScryptEngine sEngine scryptic = do
 
 newtype ScryptEngineM a = ScryptEngineM
     { unSEM :: ReaderT RuntimeState IO a }
-    deriving (Functor, Monad, Applicative, MonadIO)
+    deriving (Functor, Monad, Applicative, MonadIO, MonadThrow, MonadCatch)
 
 instance MonadReader RuntimeState ScryptEngineM where
     ask = ScryptEngineM ask
@@ -95,14 +97,15 @@ doWithFlow = mapM_ doBlock . getBlocks
         let cfg = foldMap mkConfig opts
         in  runCfg cfg stmts
     runCfg bcCfg stmts = case bcCfg^.bcTitle.to getLast of
-        Nothing -> mapM_ evalLine stmts
-        Just title -> errCxt title (mapM_ evalLine stmts)
+        Nothing -> mapM_ checkLine stmts
+        Just title -> errCxt title (mapM_ checkLine stmts)
+    checkLine stmt = evalLine stmt `E.catch` \(BadKey _) -> return ()
 
 evalLine :: Stmt -> ScryptEngineM ()
 evalLine ln = case ln of
-    Wait (sKey->key) -> stepTrace traceMsg . errCxt "wait" $ withInpKey key
-        $ \ref -> liftIO . void $ installInputWaiter ref (return ())
-        where traceMsg = concat ["wait: ", keyStr key ]
+    Wait expr -> stepTrace traceMsg . errCxt "wait"
+                 $ runExprWaiter (return ()) expr
+        where traceMsg = concat ["wait: ", "expr: ADD SHOW" ]
 
     Write (sKey->key) val's -> stepTrace traceMsg . errCxt "write"
         $ withOutKey key $ \expectType out -> case sOptVal val's of
@@ -112,15 +115,15 @@ evalLine ln = case ln of
                   , "' as type ", show expectType ]
         where traceMsg = concat ["write ", keyStr key,"; ",valStr $ show val's]
 
-    WriteSync (sKey->key) val's (sKey->syncKey) ->
-        stepTrace traceMsg . errCxt "write" $ withInpKey syncKey $ \inRef ->
+    WriteSync (sKey->key) val's expr ->
+        stepTrace traceMsg . errCxt "write" $
           errCxt "sync" $ withOutKey key $ \expectType out ->
               case sOptVal val's of
-                Just x  -> liftIO . void $ installInputWaiter inRef (out x)
+                Just x  -> runExprWaiter (out x) expr
                 Nothing -> doError $ concat
                                 [ "can't trigger type ", show expectType ]
         where traceMsg = concat
-                  ["write ", keyStr key,"; ",prettyPair "sync" $ unKey syncKey]
+                  ["write ", keyStr key,"; ",prettyPair "sync" $ show expr]
 
 
     Watch (sKey->key) -> stepTrace traceMsg . errCxt "watch"
@@ -148,23 +151,65 @@ evalLine ln = case ln of
     Sleep (sNumD->nSecs) -> stepTrace ("sleep: " ++ show nSecs)
           . errCxt "sleep" . liftIO $ threadDelay (floor (nSecs*1000000))
 
-installInputWaiter :: TVar (b -> IO ()) -> IO a -> IO b
-installInputWaiter ref preWait = do
-    sem <- newEmptyTMVarIO
-    let akt = atomically . putTMVar sem
-    atomically $ writeTVar ref akt
-    void preWait
-    atomically $ do
-        writeTVar ref nullAkt
-        takeTMVar sem
+-- For complicated expressions, we want to ensure
+--  1. We always check a coherent snapshot of values
+--  2. Every time a value is updated, we re-check the expression
+--  3. No updates are missed.
+--
+--  The solution is to use a simple semaphore.  The scrypt engine (which
+--  is in an isolated thread) waits on the semaphore then checks the
+--  expression.  If the check fails we loop, otherwise we pass out of
+--  the expression.  Every time an input changes, it also frees the
+--  semaphore.  This guarantees we don't miss any updates (since the sem
+--  will block if the current values haven't been checked).
+runExprWaiter :: IO a -> Expr -> ScryptEngineM ()
+runExprWaiter preWait expr = case evalExpr expr of
+    Right cmpExpr -> do
+        stepExc <- liftIO newEmptyTMVarIO
+        E.try (installExprWaiter stepExc cmpExpr) >>= \case
+            Right stm   ->
+                let loop = do
+                        goodStep <- atomically $ do
+                            takeTMVar stepExc
+                            (True <$ stm) `orElse` return False
+                        when (not goodStep) loop
+                in liftIO $ preWait >> loop
+            Left (BadKey key) -> doError $
+                "aborted expression <" ++ show expr ++ "> due to errors with key " ++ key
+    Left err      -> doError $ unlines
+        ["errors compiling expression: " ++ err
+        , show expr
+        ]
+
+installExprWaiter :: TMVar () -> CompiledExpr -> ScryptEngineM (STM ())
+installExprWaiter stepExc CompiledExpr{ceKey, cePred} = withInpKey ceKey $ \ref -> liftIO $ do
+    let p = maybe (throwSTM $ BadCast $ show ceKey) check . cePred
+    valRef <- newTVarIO Nothing
+    -- we want to run the prior handler in addition to the new handler,
+    -- then reinstall just the prior handler after this expression
+    -- exits successfully.
+    let akt prev x = do
+            _ <- prev x
+            atomically $ putTMVar stepExc () >> writeTVar valRef (Just x)
+    prev <- atomically $ do
+            prev <- readTVar ref
+            writeTVar ref (akt prev)
+            return prev
+    return $ do
+        writeTVar ref prev
+        maybe retry p =<< readTVar valRef
+installExprWaiter stepExc (CmpOrExpr a b) =
+    orElse <$> installExprWaiter stepExc a <*> installExprWaiter stepExc b
+installExprWaiter stepExc (CmpAndExpr a b) =
+    (>>) <$> installExprWaiter stepExc a <*> installExprWaiter stepExc b
 
 errCxt :: String -> ScryptEngineM a -> ScryptEngineM a
 errCxt err = local (over rsErrCxt (err:))
 
 withInpKey :: Key
-           -> (forall a. (Typeable a, Read a, Show a)
-                      => TVar (a -> IO ()) -> ScryptEngineM ())
-           -> ScryptEngineM ()
+           -> (forall a. (Typeable a, Read a, Show a, Ord a)
+                      => TVar (a -> IO ()) -> ScryptEngineM b)
+           -> ScryptEngineM b
 withInpKey key akt = do
     inpRef <- view rsInpMap
     inpRef^! act (liftIO . readTVarIO) . atKey key >>= \case
@@ -172,9 +217,12 @@ withInpKey key akt = do
                 iMap <- liftIO $ readTVarIO inpRef
                 writeDebug $ "input keys: " ++ show (Map.keys iMap)
                 doError $ "can't find key " ++ unKey key
+                E.throwM $ BadKey $ unKey key
             Just wkref -> liftIO (deRefWeak wkref) >>= \case
                 Just (Input ref) -> akt ref
-                Nothing  -> doError $ "internal: weak ref expired: " ++ unKey key
+                Nothing  -> do
+                    doError $ "internal: weak ref expired: " ++ unKey key
+                    E.throwM $ BadKey $ unKey key
 
 withOutKey :: Key
            -> (forall a. (Typeable a, Read a)

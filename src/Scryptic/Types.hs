@@ -7,17 +7,19 @@
 module Scryptic.Types where
 
 import Control.Concurrent.STM
+import Control.Exception as E
 import Control.Lens
 import Data.Map (Map)
 import Data.Monoid
 import qualified Data.Map as Map
 import Data.Typeable
+import Data.Data
 
 type MkFinalizer = Maybe (IO () -> IO ())
 
 -- inputs/outputs from the Scryptic point of view; an Input corresponds
 -- to output from an application.
-data Input  = forall a. (Typeable a, Read a, Show a)
+data Input  = forall a. (Typeable a, Read a, Show a, Ord a)
             => Input (TVar (a->IO ()))
     deriving (Typeable)
 data Output = forall a. (Typeable a, Read a)
@@ -67,5 +69,11 @@ data BlockConfig = BlockConfig
 instance Monoid BlockConfig where
     mempty = BlockConfig mempty
     BlockConfig tL `mappend` BlockConfig tR = BlockConfig (tL<>tR)
+
+data BadCast = BadCast String deriving (Eq, Show, Data, Typeable)
+instance E.Exception BadCast
+
+data BadKey = BadKey String deriving (Eq, Show, Data, Typeable)
+instance E.Exception BadKey
 
 $(makeLenses ''BlockConfig)

@@ -72,8 +72,8 @@ scryptInput key akt = do
     key' <- applyNamespace key
     mScryptHooks <>= Pure.scryptInput (key') akt
 
-scryptOutput :: (MonadIO m, Typeable a, Read a, Show a) => String
-             -> ScrypticM m (a->IO())
+scryptOutput :: (MonadIO m, Typeable a, Read a, Show a, Ord a)
+             => String -> ScrypticM m (a->IO())
 scryptOutput key = do
     key' <- applyNamespace key
     (akt,scryptHooks) <- liftIO $ Pure.scryptOutput key'
