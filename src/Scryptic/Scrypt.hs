@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -79,8 +80,13 @@ sNumD n = case n of
     DubNum d   -> d
 
 
+#if MIN_VERSION_lens(4,1,0)
+mkConfig :: BlockOpt -> BlockConfig
+mkConfig (TitleOpt idnt) = bcTitle._Wrapped._Just.from identS .~ idnt $ mempty
+#else
 mkConfig :: BlockOpt -> BlockConfig
 mkConfig (TitleOpt idnt) = bcTitle.unwrapped._Just.from identS .~ idnt $ mempty
+#endif
 
 data CompiledExpr = CompiledExpr
     { ceKey :: Key
