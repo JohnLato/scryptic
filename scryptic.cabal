@@ -22,6 +22,7 @@ library
                        Scryptic.Language.ParScrypt
                        Scryptic.Language.PrintScrypt
                        Scryptic.Monad,
+                       Scryptic.Parse,
                        Scryptic.Pure,
                        Scryptic.Runtime,
                        Scryptic.Runtime.Engine,

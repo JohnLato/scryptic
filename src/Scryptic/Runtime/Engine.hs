@@ -14,6 +14,7 @@ module Scryptic.Runtime.Engine (
   joinScryptEngine,
 
   defaultOneshotContext,
+  defaultInteractiveContext,
   runThread,
 
   dumpScrypt,
@@ -24,6 +25,7 @@ module Scryptic.Runtime.Engine (
 ) where
 
 import Scryptic.Runtime.Options
+import Scryptic.Parse
 import Scryptic.Scrypt
 import Scryptic.Types
 import Scryptic.Weak
@@ -40,11 +42,14 @@ import qualified Data.IntMap as IntMap
 import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (isNothing)
 import Data.Monoid
+import qualified Data.Text.IO as Text
 import Data.Typeable
 
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isIllegalOperation)
+import Foreign.C.Error (errnoToIOError, eBADF)
 
 -- runtime state shared between the main engine and all executing contexts.
 data RuntimeState = RuntimeState
@@ -129,18 +134,42 @@ instance MonadReader ScryptThreadCxt ScryptThreadM where
     local f = ScryptThreadM . local f . runScryptThread
     reader = ScryptThreadM . reader
 
-defaultOneshotContext :: ScryptEngine -> Scrypt -> IO ScryptThreadCxt
-defaultOneshotContext engine scrypt = do
+defaultInteractiveContext :: ScryptEngine -> IO ScryptThreadCxt
+defaultInteractiveContext engine = do
     tId <- newThreadId engine
     optRef <- engine ^! seOpts . act newTVarIO
-    inp <- newTMVarIO $ scrypt
+    let getInput = do
+            (parseScript <$> Text.getLine) >>= \case
+              Right scrypt -> return (Just scrypt)
+              Left err -> hPutStrLn stderr ("scryptic: error parsing input: " ++ err) >> return Nothing
+
     return $ ScryptThreadCxt
                 { _stcState = engine ^. seState
                 , _stcId    = tId
                 , _stcOpts  = optRef
                 , _stcStdout = putStrLn
                 , _stcStderr = hPutStrLn stderr
-                , _stcStdin  = atomically $ tryTakeTMVar inp
+                , _stcStdin  = getInput
+                , _stcErrCxt = ["scryptic"]
+                }
+
+defaultOneshotContext :: ScryptEngine -> Scrypt -> IO ScryptThreadCxt
+defaultOneshotContext engine scrypt = do
+    tId <- newThreadId engine
+    optRef <- engine ^! seOpts . act newTVarIO
+    inp <- newTMVarIO $ scrypt
+    let getInput = do
+            x <- atomically (tryTakeTMVar inp)
+            when (isNothing x) $ E.throwM $ errnoToIOError "defaultOneshotContext" eBADF Nothing Nothing
+            return x
+
+    return $ ScryptThreadCxt
+                { _stcState = engine ^. seState
+                , _stcId    = tId
+                , _stcOpts  = optRef
+                , _stcStdout = putStrLn
+                , _stcStderr = hPutStrLn stderr
+                , _stcStdin  = getInput
                 , _stcErrCxt = ["scryptic"]
                 }
 
@@ -172,7 +201,7 @@ doWithFlow = do
                 dumpScrypt scrypt
                 mapM_ doBlock $ getBlocks scrypt
                 loop
-            Right Nothing -> return ()
+            Right Nothing -> loop
             Left e | isIllegalOperation e -> return ()
                    | otherwise -> E.throwM e
     loop
