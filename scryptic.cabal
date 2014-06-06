@@ -24,7 +24,7 @@ library
                        Scryptic.Monad,
                        Scryptic.Pure,
                        Scryptic.Runtime,
-                       Scryptic.RuntimeOptions,
+                       Scryptic.Runtime.Options,
                        Scryptic.Scrypt,
                        Scryptic.Types
                        Scryptic.Weak

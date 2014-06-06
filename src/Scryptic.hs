@@ -10,7 +10,7 @@ module Scryptic (
 import Scryptic.Monad as M
 import Scryptic.Types as M
 import Scryptic.Runtime as M
-import Scryptic.RuntimeOptions
+import Scryptic.Runtime.Options
 import Scryptic.Language.AbsScrypt
 import Scryptic.Language.ErrM
 import Scryptic.Language.LayoutScrypt

@@ -7,7 +7,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 {-# OPTIONS -Wall #-}
-module Scryptic.RuntimeOptions (
+module Scryptic.Runtime.Options (
     ScryptOpt(..),
     defaultScryptOpts,
     debugScryptOpts,

@@ -14,7 +14,7 @@ module Scryptic.Runtime (
   joinScryptEngine,
 ) where
 
-import Scryptic.RuntimeOptions
+import Scryptic.Runtime.Options
 import Scryptic.Scrypt
 import Scryptic.Types
 import Scryptic.Weak
