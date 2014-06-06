@@ -13,6 +13,7 @@ import Control.Monad
 
 import Data.Char (isSpace)
 import Data.Monoid
+import qualified Data.IntMap as IntMap
 import Data.Map as Map
 import Data.Typeable
 
@@ -36,9 +37,9 @@ scryptInput (mkKey -> key) akt = do
 scryptOutput :: (Typeable a, Read a, Show a, Ord a)
              => String -> IO (a->IO(),ScryptHooks)
 scryptOutput (mkKey -> key) = do
-    ref <- newTVarIO (const $ return ())
+    ref <- newTVarIO (IntMap.empty)
     let scryptic = mempty & inpMap .~ Map.singleton key (Input ref)
-        akt a = readTVarIO ref >>= ($ a)
+        akt a = readTVarIO ref >>= mapMOf_ traverse ($ a)
     return (akt, scryptic)
 
 -- current rules are that we convert spaces to underscores

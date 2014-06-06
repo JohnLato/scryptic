@@ -24,6 +24,7 @@ library
                        Scryptic.Monad,
                        Scryptic.Pure,
                        Scryptic.Runtime,
+                       Scryptic.Runtime.Engine,
                        Scryptic.Runtime.Options,
                        Scryptic.Scrypt,
                        Scryptic.Types

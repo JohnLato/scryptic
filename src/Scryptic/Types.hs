@@ -9,6 +9,7 @@ module Scryptic.Types where
 import Control.Concurrent.STM
 import Control.Exception as E
 import Control.Lens
+import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Monoid
 import qualified Data.Map as Map
@@ -20,7 +21,7 @@ type MkFinalizer = IO () -> STM ()
 -- inputs/outputs from the Scryptic point of view; an Input corresponds
 -- to output from an application.
 data Input  = forall a. (Typeable a, Read a, Show a, Ord a)
-            => Input (TVar (a->IO ()))
+            => Input (TVar (IntMap (a->IO ())))
     deriving (Typeable)
 data Output = forall a. (Typeable a, Read a)
             => Output TypeRep (a -> IO ()) MkFinalizer
