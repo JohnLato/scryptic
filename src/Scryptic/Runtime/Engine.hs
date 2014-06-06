@@ -35,7 +35,7 @@ import Control.Lens
 import Control.Monad.Catch as E
 import Control.Monad.Reader
 
-import Data.Foldable (foldMap)
+import qualified Data.Foldable as Fold
 import qualified Data.IntMap as IntMap
 import Data.List (intercalate)
 import Data.Map (Map)
@@ -145,10 +145,20 @@ defaultOneshotContext engine scrypt = do
 
 runThread :: String -> ScryptThreadCxt -> IO ()
 runThread lbl stc = do
-    runReaderT (runScryptThread runner) stc
+    runReaderT (runScryptThread runner) stc `E.finally` cleanup stc
   where
     runner = outerCxt doWithFlow
     outerCxt = if null lbl then id else errCxt lbl
+
+cleanup :: ScryptThreadCxt -> IO ()
+cleanup stc = do
+    inputMap <- stc ^! stcState . rsInpMap . act readTVarIO
+    let threadId = stc^.stcId
+        cleanRef (Input innerRef) = atomically $ do
+            innerMap <- readTVar innerRef
+            when (IntMap.member threadId innerMap) $
+                writeTVar innerRef $ IntMap.delete threadId innerMap
+    Fold.mapM_ (perform (act deRefWeak . _Just . act cleanRef)) inputMap
 
 -- currently the only flow control construct I have is the script title.
 -- I guess more will likely be added if more power is needed.
@@ -165,7 +175,7 @@ doWithFlow = do
     loop
   where
     doBlock (Block opts stmts) =
-        let cfg = foldMap mkConfig opts
+        let cfg = Fold.foldMap mkConfig opts
         in  runCfg cfg stmts
     runCfg bcCfg stmts = case bcCfg^.bcTitle.to getLast of
         Nothing -> mapM_ checkLine stmts
