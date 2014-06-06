@@ -98,7 +98,12 @@ startScryptEngine opt0 = do
 
 -- | modify the inputs/outputs available to the ScryptEngine.
 --
--- thread-safe, can be called multiple times.
+-- thread-safe, can be called multiple times.  Each new call
+-- will hook in additional inputs/outputs.
+--
+-- It is an error to attempt to create a new input or output using
+-- an already-existing name (inputs and outputs are in separate namespaces
+-- however)
 joinScryptEngine :: ScryptEngine -> ScryptHooks -> IO ()
 joinScryptEngine sEngine scryptic = do
     let rState = sEngine^.seState
