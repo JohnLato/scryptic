@@ -44,6 +44,7 @@ import Data.Monoid
 import Data.Typeable
 
 import System.IO (hPutStrLn, stderr)
+import System.IO.Error (isIllegalOperation)
 
 -- runtime state shared between the main engine and all executing contexts.
 data RuntimeState = RuntimeState
@@ -166,12 +167,14 @@ doWithFlow :: ScryptThreadM ()
 doWithFlow = do
     getNext <- view stcStdin
 
-    let loop = liftIO getNext >>= \case
-            Just scrypt -> do
+    let loop = liftIO (E.try getNext) >>= \case
+            Right (Just scrypt) -> do
                 dumpScrypt scrypt
                 mapM_ doBlock $ getBlocks scrypt
                 loop
-            Nothing -> return ()
+            Right Nothing -> return ()
+            Left e | isIllegalOperation e -> return ()
+                   | otherwise -> E.throwM e
     loop
   where
     doBlock (Block opts stmts) =
