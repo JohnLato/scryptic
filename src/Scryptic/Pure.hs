@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS -Wall #-}
 module Scryptic.Pure (
@@ -7,14 +8,18 @@ module Scryptic.Pure (
 
 import Scryptic.Types
 
+import Control.Applicative
 import Control.Concurrent.STM
 import Control.Lens
 import Control.Monad
+import Control.Monad.Writer
+import Control.Monad.Catch as E
+import System.IO.Error (isIllegalOperation)
 
 import Data.Char (isSpace)
-import Data.Monoid
+import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
-import Data.Map as Map
+import qualified Data.Map as Map
 import Data.Typeable
 
 -- | Script an input to an application
@@ -39,7 +44,19 @@ scryptOutput :: (Typeable a, Read a, Show a, Ord a)
 scryptOutput (mkKey -> key) = do
     ref <- newTVarIO (IntMap.empty)
     let scryptic = mempty & inpMap .~ Map.singleton key (Input ref)
-        akt a = readTVarIO ref >>= mapMOf_ traverse ($ a)
+        akt a = do
+                  map0 <- readTVarIO ref
+                  litter <- snd <$> runWriterT (mapM_ (runF a)
+                              $ IntMap.toList map0)
+                  atomically $ modifyTVar ref (cleanup litter)
+        runF a (threadKey,f) = lift (E.try (f a)) >>= \case
+            -- if an output handle is closed, drop that key from
+            -- the map.
+            Left e | isIllegalOperation e -> tell [threadKey]
+                   | otherwise -> E.throwM e
+            Right () -> return ()
+        cleanup :: [Int] -> IntMap b -> IntMap b
+        cleanup bad mp = foldr IntMap.delete mp bad
     return (akt, scryptic)
 
 -- current rules are that we convert spaces to underscores
