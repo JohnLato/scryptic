@@ -29,7 +29,7 @@ scryptInput (mkKey -> key) akt = do
 
     cleanRef <- newTVarIO (return ())
     let derefAkt = join (readTVarIO cleanRef)
-        registerDeref = atomically . writeTVar cleanRef
+        registerDeref = writeTVar cleanRef
     return $ (derefAkt, mempty & outMap .~ Map.singleton key (Output typeHint akt registerDeref))
 
 -- | Scrypt an output from an application
