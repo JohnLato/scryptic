@@ -66,12 +66,17 @@ joinToEngine engine m = do
     liftIO $ joinScryptEngine engine scryptHooks
     return a
 
-scryptInput :: (Monad m, Typeable a, Read a) => String -> (a -> IO ())
-            -> ScrypticM m ()
+-- | Scrypt an input from an application.  Returns an action to unregister
+-- the input.
+scryptInput :: (MonadIO m, Typeable a, Read a) => String -> (a -> IO ())
+            -> ScrypticM m (IO ())
 scryptInput key akt = do
     key' <- applyNamespace key
-    mScryptHooks <>= Pure.scryptInput (key') akt
+    (deref,scryptHooks) <- liftIO $ Pure.scryptInput key' akt
+    mScryptHooks <>= scryptHooks
+    return deref
 
+-- | Scrypt an output from an application.
 scryptOutput :: (MonadIO m, Typeable a, Read a, Show a, Ord a)
              => String -> ScrypticM m (a->IO())
 scryptOutput key = do

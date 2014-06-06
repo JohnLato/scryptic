@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 import Data.Typeable
 import Data.Data
 
-type MkFinalizer = Maybe (IO () -> IO ())
+type MkFinalizer = IO () -> IO ()
 
 -- inputs/outputs from the Scryptic point of view; an Input corresponds
 -- to output from an application.

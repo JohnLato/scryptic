@@ -75,7 +75,7 @@ joinScryptEngine sEngine scryptic = do
     atomically $ do
         modifyTVar (rState^.rsInpMap) (merge "input"  wkInpMap)
         modifyTVar (rState^.rsOutMap) (merge "output" (scryptic^.outMap))
-    imapMOf_ (itraversed.outputFinalizer._Just)
+    imapMOf_ (itraversed.outputFinalizer)
             (\key -> ($ remKey (rState^.rsOutMap) key)) (scryptic^.outMap)
     return ()
 
