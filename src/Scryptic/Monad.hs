@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS -Wall #-}
 module Scryptic.Monad (
@@ -31,11 +32,13 @@ import Control.Monad.State
 
 import qualified Data.Map as Map
 import Data.Monoid
+import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Typeable
 
 data MState = MState
     { _mScryptHooks :: ScryptHooks
-    , _mNamespace   :: String
+    , _mNamespace   :: Text
     }
 
 $(makeLenses ''MState)
@@ -44,7 +47,7 @@ instance Monoid MState where
     mempty = MState mempty mempty
     l `mappend` r = MState (l^.mScryptHooks <> r^.mScryptHooks)
                            (r^.mNamespace)
-        -- namespace is notionally the same as 'Last String'
+        -- namespace is notionally the same as 'Last Text'
 
 newtype ScrypticM m a = ScrypticM { runSM :: StateT MState m a }
     deriving (Functor, Applicative, Monad, MonadIO, MonadTrans)
@@ -68,7 +71,7 @@ joinToEngine engine m = do
 
 -- | Scrypt an input from an application.  Returns an action to unregister
 -- the input.
-scryptInput :: (MonadIO m, Typeable a, Read a) => String -> (a -> IO ())
+scryptInput :: (MonadIO m, Typeable a, Read a) => Text -> (a -> IO ())
             -> ScrypticM m (IO ())
 scryptInput key akt = do
     key' <- applyNamespace key
@@ -78,7 +81,7 @@ scryptInput key akt = do
 
 -- | Scrypt an output from an application.
 scryptOutput :: (MonadIO m, Typeable a, Read a, Show a, Ord a)
-             => String -> ScrypticM m (a->IO())
+             => Text -> ScrypticM m (a->IO())
 scryptOutput key = do
     key' <- applyNamespace key
     (akt,scryptHooks) <- liftIO $ Pure.scryptOutput key'
@@ -87,7 +90,7 @@ scryptOutput key = do
 
 -- | Set a namespace context for following bindings.  Namespaces are
 -- accessed in scrypts as 'namespace.key'
-setNamespace :: Monad m => String -> ScrypticM m ()
+setNamespace :: Monad m => Text -> ScrypticM m ()
 setNamespace nm = mNamespace .= nm
 
 -- | Run a 'ScrypticM' under the current namespace.
@@ -100,13 +103,15 @@ subNamespace m = do
     newHooks <- use mScryptHooks
     let newHooks'  = newHooks & over inpMap (Map.mapKeysMonotonic modKey)
                               & over outMap (Map.mapKeysMonotonic modKey)
-        modKey = over (from keyy) (\key -> concat [nm0,".",key])
+        modKey = over (from keyy) (\key -> Text.concat [nm0,".",key])
     put $ s0 & mScryptHooks <>~ newHooks'
     return r
 
 -- | Modify a key by the current namespace.  You might need this
 -- if you're mixing 'Pure' calls with ScrypticM.
-applyNamespace :: Monad m => String -> ScrypticM m String
+applyNamespace :: Monad m => Text -> ScrypticM m Text
 applyNamespace key = do
     nm <- use mNamespace
-    if null nm then return key else return $ concat [nm, ".", key]
+    if Text.null nm
+        then return key
+        else return $ Text.concat [nm, ".", key]

@@ -2,6 +2,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -29,8 +30,8 @@ import Scryptic.Types
 import Scryptic.Language.AbsScrypt
 import Control.Applicative
 import Control.Lens
-import Data.List (intercalate)
 import Data.Monoid
+import qualified Data.Text as Text
 import Data.Typeable
 
 $(makeIso ''Ident)
@@ -54,8 +55,9 @@ getBlocks (OneBlock block) = [block]
 getBlocks (MultiBlock blocks) = blocks
 
 sKey :: SKey -> Key
-sKey (SKey quals nm) = Key $ intercalate "."
-    $ quals^.mapping (from nameQual . identS) ++ [nm^.identS]
+sKey (SKey quals nm) = Key $ Text.intercalate "."
+    $ map (^. from nameQual . identS . to Text.pack) quals
+      ++ [nm ^. identS . to Text.pack]
 
 sOptVal :: Typeable a => SOptVal -> Maybe a
 sOptVal sov = case sov of

@@ -20,6 +20,8 @@ import Data.Char (isSpace)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
+import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Typeable
 
 -- | Script an input to an application
@@ -27,7 +29,7 @@ import Data.Typeable
 -- this function returns a new IO action that can be run to de-register
 -- the input.
 scryptInput :: (Typeable a, Read a)
-            => String -> (a -> IO ()) -> IO (IO(), ScryptHooks)
+            => Text -> (a -> IO ()) -> IO (IO(), ScryptHooks)
 scryptInput (mkKey -> key) akt = do
     let typeHint = case splitTyConApp (typeOf akt) of
             (_,aTyp:_) -> aTyp
@@ -40,7 +42,7 @@ scryptInput (mkKey -> key) akt = do
 
 -- | Scrypt an output from an application
 scryptOutput :: (Typeable a, Read a, Show a, Ord a)
-             => String -> IO (a->IO(),ScryptHooks)
+             => Text -> IO (a->IO(),ScryptHooks)
 scryptOutput (mkKey -> key) = do
     ref <- newTVarIO emptyInputMap
     let scryptic = mempty & inpMap .~ Map.singleton key (Input ref)
@@ -61,5 +63,5 @@ scryptOutput (mkKey -> key) = do
     return (akt, scryptic)
 
 -- current rules are that we convert spaces to underscores
-mkKey :: String -> Key
-mkKey keyStr = Key $ Prelude.filter (not . isSpace) keyStr
+mkKey :: Text -> Key
+mkKey keyStr = Key $ Text.filter (not . isSpace) keyStr

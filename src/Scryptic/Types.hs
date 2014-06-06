@@ -13,6 +13,8 @@ import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Monoid
 import qualified Data.Map as Map
+import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Typeable
 import Data.Data
 
@@ -41,7 +43,7 @@ data Output = forall a. (Typeable a, Read a)
             => Output TypeRep (a -> IO ()) MkFinalizer
     deriving (Typeable)
 
-newtype Key = Key {unKey :: String}
+newtype Key = Key {unKey :: Text}
     deriving (Eq, Show, Ord, Read)
 
 -- kind of jenky, but 'key' is too useful an identifier to make it an iso
@@ -75,7 +77,7 @@ instance Monoid ScryptHooks where
 merge :: String -> Map Key a -> Map Key a -> Map Key a
 merge lbl = Map.unionWithKey (\k _ _ -> error $ concat
     [ "Scryptic: duplicate " , lbl
-    , " key `", k^.from keyy, "'" ] )
+    , " key `", k^.from keyy.to Text.unpack, "'" ] )
 
 data BlockConfig = BlockConfig
     { _bcTitle :: Last String }
@@ -85,10 +87,10 @@ instance Monoid BlockConfig where
     mempty = BlockConfig mempty
     BlockConfig tL `mappend` BlockConfig tR = BlockConfig (tL<>tR)
 
-data BadCast = BadCast String deriving (Eq, Show, Data, Typeable)
+data BadCast = BadCast Text deriving (Eq, Show, Data, Typeable)
 instance E.Exception BadCast
 
-data BadKey = BadKey String deriving (Eq, Show, Data, Typeable)
+data BadKey = BadKey Text deriving (Eq, Show, Data, Typeable)
 instance E.Exception BadKey
 
 $(makeLenses ''BlockConfig)
