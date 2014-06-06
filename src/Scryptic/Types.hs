@@ -18,10 +18,24 @@ import Data.Data
 
 type MkFinalizer = IO () -> STM ()
 
+data InputMap a = InputMap
+      { _imWatching :: IntMap (a->IO ())
+      , _imWaiting  :: IntMap (a->IO ())
+      } deriving (Typeable)
+
+$(makeLenses ''InputMap)
+
+emptyInputMap :: InputMap a
+emptyInputMap = InputMap mempty mempty
+
+mapBoth :: (IntMap (a->IO()) -> IntMap (a->IO()))
+        -> InputMap a -> InputMap a
+mapBoth f im = im & imWatching %~ f & imWaiting %~ f
+
 -- inputs/outputs from the Scryptic point of view; an Input corresponds
 -- to output from an application.
 data Input  = forall a. (Typeable a, Read a, Show a, Ord a)
-            => Input (TVar (IntMap (a->IO ())))
+            => Input (TVar (InputMap a))
     deriving (Typeable)
 data Output = forall a. (Typeable a, Read a)
             => Output TypeRep (a -> IO ()) MkFinalizer

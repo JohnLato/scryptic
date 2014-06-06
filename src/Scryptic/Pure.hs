@@ -42,13 +42,14 @@ scryptInput (mkKey -> key) akt = do
 scryptOutput :: (Typeable a, Read a, Show a, Ord a)
              => String -> IO (a->IO(),ScryptHooks)
 scryptOutput (mkKey -> key) = do
-    ref <- newTVarIO (IntMap.empty)
+    ref <- newTVarIO emptyInputMap
     let scryptic = mempty & inpMap .~ Map.singleton key (Input ref)
         akt a = do
-                  map0 <- readTVarIO ref
+                  im     <- readTVarIO ref
                   litter <- snd <$> runWriterT (mapM_ (runF a)
-                              $ IntMap.toList map0)
-                  atomically $ modifyTVar ref (cleanup litter)
+                              $    im^.imWatching.to (IntMap.toList)
+                                ++ im^.imWaiting.to (IntMap.toList))
+                  atomically $ modifyTVar ref $ mapBoth (cleanup litter)
         runF a (threadKey,f) = lift (E.try (f a)) >>= \case
             -- if an output handle is closed, drop that key from
             -- the map.

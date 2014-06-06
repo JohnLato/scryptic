@@ -191,8 +191,10 @@ cleanup stc = do
     let threadId = stc^.stcId
         cleanRef (Input innerRef) = atomically $ do
             innerMap <- readTVar innerRef
-            when (IntMap.member threadId innerMap) $
-                writeTVar innerRef $ IntMap.delete threadId innerMap
+            when ( innerMap^.imWatching.to (IntMap.member threadId)
+                || innerMap^.imWaiting.to (IntMap.member threadId)) $
+                writeTVar innerRef
+                    $ mapBoth (IntMap.delete threadId) innerMap
     Fold.mapM_ (perform (act deRefWeak . _Just . act cleanRef)) inputMap
 
 -- currently the only flow control construct I have is the script title.
@@ -245,7 +247,7 @@ evalLine ln = case ln of
 
 
     Watch (sKey->key) -> stepTrace traceMsg . errCxt "watch"
-        $ withInpKey key $ \watch _unwatch -> do
+        $ watchInputKey key $ \watch _unwatch -> do
             printer <- view stcStdout
             liftIO . atomically . watch $ printMsg printer
         where traceMsg =
@@ -254,7 +256,7 @@ evalLine ln = case ln of
                   $ concat [ "<", unKey key, "> " , show x]
 
     Unwatch (sKey->key) -> stepTrace traceMsg . errCxt "unwatch"
-        $ withInpKey key $ \_watch unwatch -> liftIO $ atomically unwatch
+        $ watchInputKey key $ \_watch unwatch -> liftIO $ atomically unwatch
         where traceMsg = "unwatch: " ++ keyStr key
 
     SetOpt (keyStr.sKey->key) ((^.identS)->val) ->
@@ -300,15 +302,16 @@ runExprWaiter preWait expr = case evalExpr expr of
         ]
 
 installExprWaiter :: TMVar () -> CompiledExpr -> ScryptThreadM (STM ())
-installExprWaiter stepExc CompiledExpr{ceKey, cePred} = withInpKey ceKey $ \watch unwatch -> liftIO $ do
+installExprWaiter stepExc CompiledExpr{ceKey, cePred} = waitInputKey ceKey $ \wait unwait -> liftIO $ do
     let p = maybe (throwSTM $ BadCast $ show ceKey) check . cePred
     valRef <- newTVarIO Nothing
     let akt x =
             atomically $ putTMVar stepExc () >> writeTVar valRef (Just x)
-    atomically $ watch akt
+    atomically $ wait akt
     return $ do
-        unwatch
+        unwait
         maybe retry p =<< readTVar valRef
+
 installExprWaiter stepExc (CmpOrExpr a b) =
     orElse <$> installExprWaiter stepExc a <*> installExprWaiter stepExc b
 installExprWaiter stepExc (CmpAndExpr a b) =
@@ -317,13 +320,32 @@ installExprWaiter stepExc (CmpAndExpr a b) =
 errCxt :: String -> ScryptThreadM a -> ScryptThreadM a
 errCxt err = local (over stcErrCxt (err:))
 
-withInpKey :: Key
+watchInputKey
+    :: Key
+    -> (forall a.  (Typeable a, Read a, Show a, Ord a)
+                => ((a -> IO ()) -> STM ()) -- watch on this key
+                -> (STM ())                 -- unwatch this key
+                -> ScryptThreadM b)
+    -> ScryptThreadM b
+watchInputKey = withInpKey' imWatching
+
+waitInputKey
+    :: Key
+    -> (forall a.  (Typeable a, Read a, Show a, Ord a)
+                => ((a -> IO ()) -> STM ()) -- watch on this key
+                -> (STM ())                 -- unwatch this key
+                -> ScryptThreadM b)
+    -> ScryptThreadM b
+waitInputKey = withInpKey' imWaiting
+
+withInpKey' :: (forall x. Typeable x => Setting (->) (InputMap x) (InputMap x) (IntMap.IntMap (x->IO())) (IntMap.IntMap (x->IO())))
+           -> Key
            -> (forall a. (Typeable a, Read a, Show a, Ord a)
-                      => ((a -> IO ()) -> STM ()) -- run input
-                      -> (STM ())      -- unwatch this key from this thread
+                      => ((a -> IO ()) -> STM ()) -- watch on this key
+                      -> (STM ())                 -- unwatch this key
                       -> ScryptThreadM b)
            -> ScryptThreadM b
-withInpKey key akt = do
+withInpKey' sel key akt = do
     inpRef <- view $ stcState . rsInpMap
     threadId <- view stcId
     inpRef^! act (liftIO . readTVarIO) . atKey key >>= \case
@@ -334,8 +356,10 @@ withInpKey key akt = do
                 E.throwM $ BadKey $ unKey key
             Just wkref -> liftIO (deRefWeak wkref) >>= \case
                 Just (Input ref) -> do
-                    let watch   = modifyTVar ref . IntMap.insert threadId
-                        unwatch = modifyTVar ref $ IntMap.delete threadId
+                    let watch x = modifyTVar ref
+                                  $ over sel (IntMap.insert threadId x)
+                        unwatch = modifyTVar ref
+                                  $ over sel (IntMap.delete threadId)
                     akt watch unwatch
                 Nothing  -> do
                     doError $ "internal: weak ref expired: " ++ unKey key
