@@ -1,6 +1,6 @@
 
 name:                scryptic
-version:             0.1.0.1
+version:             0.2.0.0
 synopsis:            Scripting engine for apps
 description:         Simple scripting language for controlling apps
 license:             GPL-3
