@@ -103,7 +103,7 @@ subNamespace m = do
     newHooks <- use mScryptHooks
     let newHooks'  = newHooks & over inpMap (Map.mapKeysMonotonic modKey)
                               & over outMap (Map.mapKeysMonotonic modKey)
-        modKey = over (from keyy) (\key -> Text.concat [nm0,".",key])
+        modKey = over keyy (\key -> Text.concat [nm0,".",key])
     put $ s0 & mScryptHooks <>~ newHooks'
     return r
 

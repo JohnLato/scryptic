@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -264,7 +265,11 @@ evalLine ln = case ln of
         $ watchInputKey key $ \_watch unwatch -> liftIO $ atomically unwatch
         where traceMsg = "unwatch: " <> keyStr key
 
-    SetOpt (keyStr.sKey->key) ((^.identS)->val) ->
+#if MIN_VERSION_lens(4,3,0)
+    SetOpt (keyStr.sKey->key) ((^.ident)->val) ->
+#else
+    SetOpt (keyStr.sKey->key) ((^.from ident)->val) ->
+#endif
         stepTrace traceMsg . errCxt "setopt" $ case getValuedOptionSetter key val of
           Left err -> doError $ "can't find option setter: " <> err
           Right f -> do

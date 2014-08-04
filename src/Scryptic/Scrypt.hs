@@ -16,7 +16,7 @@ module Scryptic.Scrypt (
   sVal,
   sNum,
   sNumD,
-  identS,
+  ident,
   titleOpt,
   nameQual,
   mkConfig,
@@ -34,30 +34,55 @@ import Data.Monoid
 import qualified Data.Text as Text
 import Data.Typeable
 
-$(makeIso ''Ident)
-$(makeIso ''BlockOpt)
-$(makeIso ''NameQual)
+#ifndef MIN_VERSION_lens
+#define MIN_VERSION_lens(x,y,z) 1
+#endif
+
+#if MIN_VERSION_lens(4,3,0)
+#define MKISO makePrisms
+#else
+#define MKISO makeIso
+#endif
+
+
+$(MKISO ''Ident)
+$(MKISO ''BlockOpt)
+$(MKISO ''NameQual)
+
+#if MIN_VERSION_lens(4,3,0)
+ident :: Iso' Ident String
+ident = _Ident
+
+nameQual :: Iso' NameQual Ident
+nameQual = _NameQual
+
+titleOpt :: Iso' BlockOpt Ident
+titleOpt = _TitleOpt
+#endif
 
 {-
  - bnfc is currently broken with bytestrings+layout, so
  - using String parser until that's fixed. (probably by me :o )
 
 -- alex assumes UTF8, so we do too.
-identS :: Iso' Ident String
-identS = from $ packed . iso Text.encodeUtf8 Text.decodeUtf8 . ident
+ident :: Iso' Ident String
+ident = from $ packed . iso Text.encodeUtf8 Text.decodeUtf8 . ident
 -}
-
-identS :: Iso' Ident String
-identS = from ident
 
 getBlocks :: Scrypt -> [Block]
 getBlocks (OneBlock block) = [block]
 getBlocks (MultiBlock blocks) = blocks
 
 sKey :: SKey -> Key
+#if MIN_VERSION_lens(4,3,0)
 sKey (SKey quals nm) = Key $ Text.intercalate "."
-    $ map (^. from nameQual . identS . to Text.pack) quals
-      ++ [nm ^. identS . to Text.pack]
+    $ map (^. nameQual . ident . to Text.pack) quals
+      ++ [nm ^. ident . to Text.pack]
+#else
+sKey (SKey quals nm) = Key $ Text.intercalate "."
+    $ map (^. from nameQual . from ident . to Text.pack) quals
+      ++ [nm ^. from ident . to Text.pack]
+#endif
 
 sOptVal :: Typeable a => SOptVal -> Maybe a
 sOptVal sov = case sov of
@@ -82,12 +107,13 @@ sNumD n = case n of
     DubNum d   -> d
 
 
-#if MIN_VERSION_lens(4,1,0)
 mkConfig :: BlockOpt -> BlockConfig
-mkConfig (TitleOpt idnt) = bcTitle._Wrapped._Just.from identS .~ idnt $ mempty
+#if MIN_VERSION_lens(4,3,0)
+mkConfig (TitleOpt idnt) = bcTitle._Wrapped._Just.from ident .~ idnt $ mempty
+#elif MIN_VERSION_lens(4,0,0)
+mkConfig (TitleOpt idnt) = bcTitle._Wrapped._Just.ident .~ idnt $ mempty
 #else
-mkConfig :: BlockOpt -> BlockConfig
-mkConfig (TitleOpt idnt) = bcTitle.unwrapped._Just.from identS .~ idnt $ mempty
+mkConfig (TitleOpt idnt) = bcTitle.unwrapped._Just.ident .~ idnt $ mempty
 #endif
 
 data CompiledExpr = CompiledExpr

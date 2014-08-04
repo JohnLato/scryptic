@@ -10,6 +10,7 @@
 {-# OPTIONS -Wall #-}
 module Scryptic.Runtime.Options (
     ScryptOpt(..),
+    unSOA,
     defaultScryptOpts,
     debugScryptOpts,
 
@@ -35,15 +36,15 @@ import qualified Data.Text as Text
 import Data.Typeable
 
 #ifndef MIN_VERSION_lens
-#define MIN_VERSION_lens(x,y,z) 0
+#define MIN_VERSION_lens(x,y,z) 1
 #endif
 
-#if MIN_VERSION_lens(4,0,0)
-#define LENS Lens
-#define UNLENS runLens
+#if MIN_VERSION_lens(4,3,0)
+#define MKISO makeLenses
+#define SCRYPTOPTADJ _scryptOptAdj
 #else
-#define LENS ReifyLens
-#define UNLENS reflectLens
+#define MKISO makeIso
+#define SCRYPTOPTADJ unSOA
 #endif
 
 data ScryptOpt = ScryptOpt
@@ -61,18 +62,24 @@ defaultScryptOpts = ScryptOpt False True False False
 debugScryptOpts :: ScryptOpt
 debugScryptOpts = ScryptOpt True False True True
 
-newtype ScryptOptAdj = ScryptOptAdj { unSOA :: ScryptOpt -> ScryptOpt}
-$(makeIso ''ScryptOptAdj)
+newtype ScryptOptAdj = ScryptOptAdj { SCRYPTOPTADJ :: ScryptOpt -> ScryptOpt}
+$(MKISO ''ScryptOptAdj)
+
+#if MIN_VERSION_lens(4,3,0)
+unSOA :: ScryptOptAdj -> ScryptOpt -> ScryptOpt
+unSOA = SCRYPTOPTADJ
+#endif
+
 
 instance Show (ScryptOptAdj) where
     show _ = "<<scryptOptAdj>>"
 
 boolOptionMap :: Map Text (ReifiedLens' ScryptOpt Bool)
 boolOptionMap = Map.fromList
-    [ ("trace", LENS soTrace)
-    , ("dieOnError", LENS soDieOnErr)
-    , ("debug", LENS soDebug)
-    , ("dumpScrypts", LENS soDumpScrypts) ]
+    [ ("trace", Lens soTrace)
+    , ("dieOnError", Lens soDieOnErr)
+    , ("debug", Lens soDebug)
+    , ("dumpScrypts", Lens soDumpScrypts) ]
 
 getValuedOptionSetter :: Text -> String -> Either Text ScryptOptAdj
 getValuedOptionSetter key val = 
@@ -87,7 +94,7 @@ getValuedOptionSetter' :: forall a. (Typeable a, Read a)
 getValuedOptionSetter' optMap key val = case Map.lookup key optMap of
     Nothing -> Left $ "scryptic: no option named " <> key
     Just theLens -> case mRead val of
-        Just b  -> return . ScryptOptAdj $ (UNLENS theLens) .~ b
+        Just b  -> return . ScryptOptAdj $ (runLens theLens) .~ b
         Nothing -> failKeyVal key val (show $ typeOf (undefined :: a))
 
 failKeyVal :: Text -> String -> String -> Either Text a

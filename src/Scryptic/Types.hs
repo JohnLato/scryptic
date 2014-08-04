@@ -47,7 +47,8 @@ newtype Key = Key {unKey :: Text}
     deriving (Eq, Show, Ord, Read)
 
 -- kind of jenky, but 'key' is too useful an identifier to make it an iso
-$(makeLensesWith (isoRules & lensIso .~ (const $ Just "keyy")) ''Key)
+-- $(makeLensesWith (isoRules & lensIso .~ (const $ Just "keyy")) ''Key)
+$(makeLensesWith (lensRules & singletonAndField .~ True & lensIso .~ (const $ Just "keyy")) ''Key)
 
 data ScryptHooks = ScryptHooks
     { _inpMap :: Map Key Input
@@ -77,7 +78,7 @@ instance Monoid ScryptHooks where
 merge :: String -> Map Key a -> Map Key a -> Map Key a
 merge lbl = Map.unionWithKey (\k _ _ -> error $ concat
     [ "Scryptic: duplicate " , lbl
-    , " key `", k^.from keyy.to Text.unpack, "'" ] )
+    , " key `", k^.keyy.to Text.unpack, "'" ] )
 
 data BlockConfig = BlockConfig
     { _bcTitle :: Last String }
