@@ -1,11 +1,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS -Wall #-}
 module Scryptic.Monad (
   -- * Monadic interface for hooking up the ScryptEngine
   ScrypticM(..),
+  mapScrypticM,
 
   -- * Creating hooks
   scryptInput,
@@ -56,6 +58,9 @@ instance Monad m => MonadState MState (ScrypticM m) where
     get = ScrypticM get
     put = ScrypticM . put
     state = ScrypticM . state
+
+mapScrypticM :: (forall x. m x -> n x) -> ScrypticM m a -> ScrypticM n a
+mapScrypticM f = ScrypticM . mapStateT f . runSM
 
 getScryptHooks :: Monad m => ScrypticM m a -> m (a,ScryptHooks)
 getScryptHooks m = (liftM . fmap) (view mScryptHooks)
